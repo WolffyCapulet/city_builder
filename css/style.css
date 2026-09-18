@@ -1,0 +1,16 @@
+body {
+  font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+  background: #f4ecd8;
+  color: #333;
+  margin: 0;
+  padding: 20px;
+}
+
+#app {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: #5c4326;
+}
