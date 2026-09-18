@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>城主村莊 - City Builder</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="game-header">
+    <h1>⚔️ 城 主 村 莊 ⚔️</h1>
+    <p class="subtitle">— 重製版 —</p>
+  </header>
+
+  <!-- 上方固定資源列 -->
+  <div id="resource-bar" class="resource-bar">
+    <div id="resource-list" class="resource-list"></div>
+  </div>
+
+  <main id="app">
+
+    <!-- 村莊地圖區塊：四個採集點以 2x2 版面呈現 -->
+    <section class="map-section">
+      <h2 class="section-title">🗺️ 村莊地圖</h2>
+      <div id="spot-list" class="spot-map"></div>
+    </section>
+
+    <!-- 加工佇列 -->
+    <section class="queue-section">
+      <h2 class="section-title">⚒️ 加工佇列</h2>
+      <div id="crafting-queue" class="queue-panel"></div>
+    </section>
+
+  </main>
+
+  <div id="notifications" class="notifications"></div>
+
+  <!-- Data 層 -->
+  <script src="data/resources.js"></script>
+  <script src="data/gatheringSpots.js"></script>
+  <script src="data/buildings.js"></script>
+  <script src="data/recipes.js"></script>
+  <script src="data/production.js"></script>
+
+  <!-- Core 層 -->
+  <script src="js/core/gameState.js"></script>
+  <script src="js/core/saveLoad.js"></script>
+  <script src="js/core/gameLoop.js"></script>
+
+  <!-- Systems 層 -->
+  <script src="js/systems/gathering.js"></script>
+  <script src="js/systems/crafting.js"></script>
+
+  <!-- UI 層 -->
+  <script src="js/ui/render.js"></script>
+
+  <!-- 啟動 -->
+  <script src="js/main.js"></script>
+</body>
+</html>
