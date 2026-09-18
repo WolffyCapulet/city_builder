@@ -2,32 +2,8 @@
 
 const UI = (function () {
 
-  // 採集建築的視覺生產週期長度（秒）。純視覺用，方便玩家看到「正在生產」，
-  // 實際資源數量仍依 production.js 的每秒速率持續累加，不受這個週期影響。
-  const GATHER_CYCLE_SECONDS = 8;
-
   function formatAmount(n) {
     return Math.floor(n).toLocaleString('zh-Hant');
-  }
-
-  // 計算採集建築目前的生產週期進度（0~100）
-  function getGatherProgress(buildingState) {
-    if (!buildingState.builtAt) {
-      buildingState.builtAt = Date.now(); // 相容舊存檔：第一次看到時補上時間戳
-    }
-    const elapsedMs = Date.now() - buildingState.builtAt;
-    const cycleMs = GATHER_CYCLE_SECONDS * 1000;
-    const progress = (elapsedMs % cycleMs) / cycleMs;
-    return Math.floor(progress * 100);
-  }
-
-  // 產出資源的圖示列（給進度條旁邊看的）
-  function getBuildingProduceIcons(buildingId) {
-    const production = BUILDING_PRODUCTION[buildingId];
-    if (!production) return '';
-    return Object.keys(production)
-      .map(resId => (RESOURCES[resId] ? RESOURCES[resId].icon : ''))
-      .join(' ');
   }
 
   function renderResources() {
@@ -78,17 +54,7 @@ const UI = (function () {
             ).join(' ');
             return `<div class="building built">✅ ${b.icon} ${b.name} ${recipeButtons}</div>`;
           }
-          // 採集型建築：顯示生產週期進度條
-          const buildingState = state.spots[spotId].buildings[b.id];
-          const progress = getGatherProgress(buildingState);
-          const produceIcons = getBuildingProduceIcons(b.id);
-          return `
-            <div class="building built gathering">
-              <div class="building-row">✅ ${b.icon} ${b.name}<span class="produce-icons">${produceIcons}</span></div>
-              <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width:${progress}%"></div>
-              </div>
-            </div>`;
+          return `<div class="building built">✅ ${b.icon} ${b.name}（生產中）</div>`;
         }
         return `<div class="building buildable">${b.icon} ${b.name}
           <button onclick="UI.handleBuild('${spotId}', '${b.id}')">建造</button></div>`;

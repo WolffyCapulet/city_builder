@@ -66,7 +66,7 @@ const GameState = (function () {
   function buildBuilding(spotId, buildingId) {
     const spot = state.spots[spotId];
     if (!spot) return false;
-    spot.buildings[buildingId] = { built: true, level: 1, builtAt: Date.now() };
+    spot.buildings[buildingId] = { built: true, level: 1 };
     return true;
   }
 

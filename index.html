@@ -7,34 +7,26 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <div id="app">
+    <h1>城主村莊 重製版</h1>
 
-  <header class="game-header">
-    <h1>⚔️ 城 主 村 莊 ⚔️</h1>
-    <p class="subtitle">— 重製版 —</p>
-  </header>
+    <section>
+      <h2>資源</h2>
+      <div id="resource-list" class="resource-list"></div>
+    </section>
 
-  <!-- 上方固定資源列 -->
-  <div id="resource-bar" class="resource-bar">
-    <div id="resource-list" class="resource-list"></div>
+    <section>
+      <h2>採集點</h2>
+      <div id="spot-list" class="spot-list"></div>
+    </section>
+
+    <section>
+      <h2>加工佇列</h2>
+      <div id="crafting-queue"></div>
+    </section>
+
+    <div id="notifications" class="notifications"></div>
   </div>
-
-  <main id="app">
-
-    <!-- 村莊地圖區塊：四個採集點以 2x2 版面呈現 -->
-    <section class="map-section">
-      <h2 class="section-title">🗺️ 村莊地圖</h2>
-      <div id="spot-list" class="spot-map"></div>
-    </section>
-
-    <!-- 加工佇列 -->
-    <section class="queue-section">
-      <h2 class="section-title">⚒️ 加工佇列</h2>
-      <div id="crafting-queue" class="queue-panel"></div>
-    </section>
-
-  </main>
-
-  <div id="notifications" class="notifications"></div>
 
   <!-- Data 層 -->
   <script src="data/resources.js"></script>
