@@ -1,28 +1,41 @@
-// render.js + events.js 合併為 UI 模組（先求功能完整，之後可再拆分美化）
+// render.js
+// UI 模組：分頁切換（人物資訊/生產/加工/建築）+ 各分頁內容渲染
 
 const UI = (function () {
 
-  // 採集建築的視覺生產週期長度（秒）。跟 GameLoop 的自動生產結算週期一致，
-  // 讓進度條跑滿的瞬間，就是實際資源到手的瞬間。
-  const GATHER_CYCLE_SECONDS = 10;
+  let currentTab = 'character';
 
   function formatAmount(n) {
     return Math.floor(n).toLocaleString('zh-Hant');
   }
 
-  // 計算目前這一輪自動生產的進度（0~100），所有採集建築共用同一個節奏
-  function getGatherProgress() {
-    return GameLoop.getProductionProgress();
+  function formatCost(costObj) {
+    return Object.entries(costObj).map(([resId, amt]) => {
+      const def = RESOURCES[resId];
+      return `${def ? def.name : resId} x${amt}`;
+    }).join('、');
   }
 
-  // 產出資源的圖示列（給進度條旁邊看的）
-  function getBuildingProduceIcons(buildingId) {
-    const production = BUILDING_PRODUCTION[buildingId];
-    if (!production) return '';
-    return Object.keys(production)
-      .map(resId => (RESOURCES[resId] ? RESOURCES[resId].icon : ''))
-      .join(' ');
+  function formatRecipeLabel(recipe) {
+    const outputText = recipe.output
+      ? Object.keys(recipe.output).map(id => RESOURCES[id].name).join('/')
+      : '???（隨機）';
+    return `${outputText}（${recipe.duration}秒）`;
   }
+
+  // ========== 分頁切換 ==========
+
+  function switchTab(tabName) {
+    currentTab = tabName;
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('hidden', panel.id !== `tab-${tabName}`);
+    });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+  }
+
+  // ========== 上方資源列（所有分頁共用） ==========
 
   function renderResources() {
     const state = GameState.get();
@@ -30,11 +43,11 @@ const UI = (function () {
     if (!container) return;
 
     const owned = Object.entries(state.resources)
-      .filter(([, amt]) => amt >= 1) // 未滿 1 個先不顯示，避免小數殘值造成一堆「0」的雜訊
+      .filter(([, amt]) => amt >= 1)
       .sort((a, b) => b[1] - a[1]);
 
     if (owned.length === 0) {
-      container.innerHTML = '<p class="empty">尚未擁有任何資源，先試試「徒手採集」吧</p>';
+      container.innerHTML = '<p class="empty">尚未擁有任何資源，先到「生產」分頁徒手採集吧</p>';
       return;
     }
 
@@ -45,9 +58,132 @@ const UI = (function () {
     }).join('');
   }
 
-  function renderSpots() {
+  // ========== 人物資訊分頁 ==========
+
+  function renderCharacterPanel() {
+    const container = document.getElementById('character-panel');
+    if (!container) return;
+
+    const c = GameState.get().character;
+    const expNeeded = GameState.expNeededForLevel(c.level);
+    const expPct = Math.floor((c.exp / expNeeded) * 100);
+    const staminaPct = Math.floor((c.stamina / c.maxStamina) * 100);
+    const regenPct = Character.getRegenProgress();
+    const rarityBonus = Math.round((Gathering.getCharacterRarityMultiplier() - 1) * 100);
+
+    container.innerHTML = `
+      <div class="char-stat-block">
+        <div class="char-stat-label">等級 Lv.${c.level}　經驗值 ${c.exp} / ${expNeeded}</div>
+        <div class="stat-bar-container">
+          <div class="stat-bar-fill exp-fill" style="width:${expPct}%"></div>
+        </div>
+        <div class="char-stat-sub">進階物品採集機率加成：+${rarityBonus}%（徒手採集會增加經驗值）</div>
+      </div>
+      <div class="char-stat-block">
+        <div class="char-stat-label">體力 ${Math.floor(c.stamina)} / ${c.maxStamina}</div>
+        <div class="stat-bar-container">
+          <div class="stat-bar-fill stamina-fill" style="width:${staminaPct}%"></div>
+        </div>
+        <div class="char-stat-sub">自動恢復進度（每 5 秒 +1）：${regenPct}%</div>
+      </div>
+    `;
+  }
+
+  function renderFoodList() {
+    const container = document.getElementById('food-list');
+    if (!container) return;
+
     const state = GameState.get();
-    const container = document.getElementById('spot-list');
+    const owned = Object.keys(FOOD_ITEMS)
+      .filter(resId => (state.resources[resId] || 0) >= 1);
+
+    if (owned.length === 0) {
+      container.innerHTML = '<p class="empty">目前沒有可以吃的食物</p>';
+      return;
+    }
+
+    container.innerHTML = owned.map(resId => {
+      const def = RESOURCES[resId];
+      const foodDef = FOOD_ITEMS[resId];
+      const amt = Math.floor(state.resources[resId]);
+      return `
+        <div class="food-item">
+          <span>${def.icon} ${def.name} x${amt}（恢復體力 +${foodDef.staminaRestore}）</span>
+          <button onclick="UI.handleEatFood('${resId}')">吃掉</button>
+        </div>`;
+    }).join('');
+  }
+
+  function handleEatFood(resourceId) {
+    const result = Character.eatFood(resourceId);
+    if (!result.success) {
+      alert(result.reason);
+      return;
+    }
+    notifySimple(`🍽️ 恢復了 ${result.staminaRestored} 點體力`);
+    SaveLoad.save();
+    render();
+  }
+
+  // ========== 生產分頁：採集點狀態 + 自動生產進度 + 徒手採集 + 機率表 ==========
+
+  let expandedProbabilitySpot = null; // 目前展開機率表的採集點（同時只展開一個）
+
+  function toggleProbabilityView(spotId) {
+    expandedProbabilitySpot = (expandedProbabilitySpot === spotId) ? null : spotId;
+    renderProductionTab();
+  }
+
+  function getBuildingProduceIcons(buildingId) {
+    const production = BUILDING_PRODUCTION[buildingId];
+    if (!production) return '';
+    return Object.keys(production)
+      .map(resId => (RESOURCES[resId] ? RESOURCES[resId].icon : ''))
+      .join(' ');
+  }
+
+  function renderProbabilityBlock(spotId) {
+    const state = GameState.get();
+    const currentLevel = state.spots[spotId].level;
+    const spotTables = DROP_TABLES[spotId] || {};
+    const levels = Object.keys(spotTables).map(Number).sort((a, b) => a - b);
+
+    const levelsHtml = levels.map(lv => {
+      const effectiveTable = Gathering.getEffectiveDropTable(spotId, lv);
+      const totalWeight = effectiveTable.reduce((s, e) => s + e.effectiveWeight, 0);
+      const isCurrent = lv === currentLevel;
+      const isLocked = lv > currentLevel;
+
+      const rowsHtml = effectiveTable
+        .slice()
+        .sort((a, b) => b.effectiveWeight - a.effectiveWeight)
+        .map(entry => {
+          const def = RESOURCES[entry.resource];
+          const pct = ((entry.effectiveWeight / totalWeight) * 100).toFixed(1);
+          const isNew = entry.newAtLevel === lv;
+          return `<div class="prob-row">
+            <span class="prob-name">${def ? def.icon : ''} ${def ? def.name : entry.resource}${isNew ? ' <span class="new-tag">NEW</span>' : ''}</span>
+            <span class="prob-pct">${pct}%</span>
+          </div>`;
+        }).join('');
+
+      return `
+        <div class="prob-level-block ${isCurrent ? 'current-level' : ''} ${isLocked ? 'locked-level' : ''}">
+          <div class="prob-level-title">Lv.${lv} ${isCurrent ? '（目前等級）' : isLocked ? '（尚未達到）' : ''}</div>
+          <div class="prob-rows">${rowsHtml}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="prob-panel">
+        <p class="prob-hint">機率已套用人物等級加成（進階物品 +${Math.round((Gathering.getCharacterRarityMultiplier() - 1) * 100)}%）。等級越高開放的物品種類越多，原本物品機率會被稀釋，但自動生產的產量倍率也會提高。</p>
+        <div class="prob-level-list">${levelsHtml}</div>
+      </div>`;
+  }
+
+  function renderProductionTab() {
+    const state = GameState.get();
+    const container = document.getElementById('production-list');
     if (!container) return;
 
     container.innerHTML = Object.keys(GATHERING_SPOTS).map(spotId => {
@@ -55,55 +191,37 @@ const UI = (function () {
       const spotState = state.spots[spotId];
       const levelData = SPOT_LEVELS[Math.min(spotState.level - 1, SPOT_LEVELS.length - 1)];
 
-      const availableBuildings = Object.values(BUILDINGS).filter(b => b.spot === spotId);
+      const builtGathering = Object.values(BUILDINGS)
+        .filter(b => b.spot === spotId && b.type === 'gathering' && GameState.hasBuilding(spotId, b.id));
 
-      const buildingsHtml = availableBuildings.map(b => {
-        const built = GameState.hasBuilding(spotId, b.id);
-        const locked = spotState.level < b.unlockLevel;
-
-        if (locked) {
-          return `<div class="building locked">🔒 ${b.icon} ${b.name}（需採集點等級 ${b.unlockLevel}）</div>`;
-        }
-        if (built) {
-          if (b.type === 'processing') {
-            const recipes = Object.values(RECIPES).filter(r => r.building === b.id);
-            const recipeButtons = recipes.map(r =>
-              `<button onclick="UI.handleCraft('${spotId}', '${r.id}')">製作 ${formatRecipeLabel(r)}</button>`
-            ).join(' ');
-            return `<div class="building built">✅ ${b.icon} ${b.name} ${recipeButtons}</div>`;
-          }
-          // 採集型建築：顯示生產週期進度條（跟其他採集建築共用同一個節奏）
-          const progress = getGatherProgress();
-          const produceIcons = getBuildingProduceIcons(b.id);
-          return `
-            <div class="building built gathering">
-              <div class="building-row">✅ ${b.icon} ${b.name}<span class="produce-icons">${produceIcons}</span></div>
-              <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width:${progress}%"></div>
-              </div>
-            </div>`;
-        }
-
-        // 尚未建造：顯示建造成本，資源不足時按鈕仍可點但會提示不足
-        const costText = b.cost ? formatCost(b.cost) : '免費';
-        const affordable = b.cost ? GameState.hasResources(b.cost) : true;
-        return `
-          <div class="building buildable">
-            <div class="building-row">${b.icon} ${b.name}
-              <button class="${affordable ? '' : 'disabled-look'}" onclick="UI.handleBuild('${spotId}', '${b.id}')">建造</button>
-            </div>
-            <div class="cost-text">需要：${costText}</div>
-          </div>`;
-      }).join('');
-
-      const nextLevel = SPOT_LEVELS[spotState.level]; // 下一級資料（若存在）
-      const upgradeHtml = nextLevel
-        ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
-        : `<span class="max-level">已達最高等級</span>`;
+      const buildingsHtml = builtGathering.length === 0
+        ? '<p class="empty">這裡還沒有任何生產建築，先去「建築」分頁蓋一座吧</p>'
+        : builtGathering.map(b => {
+            const progress = GameLoop.getProductionProgress();
+            const produceIcons = getBuildingProduceIcons(b.id);
+            return `
+              <div class="building built gathering">
+                <div class="building-row">✅ ${b.icon} ${b.name}<span class="produce-icons">${produceIcons}</span></div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar-fill" style="width:${progress}%"></div>
+                </div>
+              </div>`;
+          }).join('');
 
       const cooldown = Gathering.getManualGatherCooldownRemaining(spotId);
-      const manualBtnLabel = cooldown > 0 ? `冷卻中 (${cooldown}s)` : '✋ 徒手採集';
-      const manualBtnDisabled = cooldown > 0 ? 'disabled' : '';
+      const stamina = state.character.stamina;
+      let manualBtnLabel = '✋ 徒手採集（消耗體力1）';
+      let manualBtnDisabled = '';
+      if (cooldown > 0) {
+        manualBtnLabel = `冷卻中 (${cooldown}s)`;
+        manualBtnDisabled = 'disabled';
+      } else if (stamina < Gathering.MANUAL_GATHER_STAMINA_COST) {
+        manualBtnLabel = '體力不足';
+        manualBtnDisabled = 'disabled';
+      }
+
+      const isExpanded = expandedProbabilitySpot === spotId;
+      const probBlock = isExpanded ? renderProbabilityBlock(spotId) : '';
 
       return `
         <div class="spot-card">
@@ -112,27 +230,61 @@ const UI = (function () {
           <p class="spot-bonus">產量倍率 x${levelData.quantityMultiplier}　稀有加成 +${levelData.rarityBonus}%</p>
           <div class="spot-btn-row">
             <button class="manual-gather-btn" ${manualBtnDisabled} onclick="UI.handleManualGather('${spotId}')">${manualBtnLabel}</button>
-            <button class="probability-btn" onclick="UI.openProbabilityPanel('${spotId}')">📊 機率表</button>
+            <button class="probability-btn" onclick="UI.toggleProbabilityView('${spotId}')">${isExpanded ? '收起機率表' : '📊 機率表'}</button>
           </div>
+          ${probBlock}
           <div class="buildings">${buildingsHtml}</div>
-          <div class="upgrade">${upgradeHtml}</div>
         </div>
       `;
     }).join('');
   }
 
-  function formatRecipeLabel(recipe) {
-    const outputText = recipe.output
-      ? Object.keys(recipe.output).map(id => RESOURCES[id].name).join('/')
-      : '???（隨機）';
-    return `${outputText}（${recipe.duration}秒）`;
+  function handleManualGather(spotId) {
+    const result = Gathering.manualGather(spotId);
+    if (!result.success) {
+      if (result.reason && result.reason.indexOf('冷卻中') === -1) {
+        // 冷卻中不特別跳警示（畫面上按鈕已經有秒數），其他原因（體力不足等）跳提示
+        alert(result.reason);
+      }
+      render();
+      return;
+    }
+    const def = RESOURCES[result.resourceId];
+    notifySimple(`${def.icon} 獲得 ${def.name} +1　(經驗 +${result.expGained})`);
+    SaveLoad.save();
+    render();
   }
 
-  function formatCost(costObj) {
-    return Object.entries(costObj).map(([resId, amt]) => {
-      const def = RESOURCES[resId];
-      return `${def ? def.name : resId} x${amt}`;
-    }).join('、');
+  // ========== 加工分頁 ==========
+
+  function renderCraftingTab() {
+    const state = GameState.get();
+    const container = document.getElementById('crafting-buildings-list');
+    if (!container) return;
+
+    const spotsWithProcessing = Object.keys(GATHERING_SPOTS).map(spotId => {
+      const spotDef = GATHERING_SPOTS[spotId];
+      const builtProcessing = Object.values(BUILDINGS)
+        .filter(b => b.spot === spotId && b.type === 'processing' && GameState.hasBuilding(spotId, b.id));
+
+      if (builtProcessing.length === 0) return '';
+
+      const buildingsHtml = builtProcessing.map(b => {
+        const recipes = Object.values(RECIPES).filter(r => r.building === b.id);
+        const recipeButtons = recipes.map(r =>
+          `<button onclick="UI.handleCraft('${spotId}', '${r.id}')">製作 ${formatRecipeLabel(r)}</button>`
+        ).join(' ');
+        return `<div class="building built">${b.icon} ${b.name}　${recipeButtons}</div>`;
+      }).join('');
+
+      return `
+        <div class="spot-card">
+          <h3>${spotDef.icon} ${spotDef.name}</h3>
+          <div class="buildings">${buildingsHtml}</div>
+        </div>`;
+    }).filter(html => html !== '').join('');
+
+    container.innerHTML = spotsWithProcessing || '<p class="empty">還沒有任何加工建築，先到「建築」分頁蓋一座吧</p>';
   }
 
   function renderCraftingQueue() {
@@ -153,10 +305,62 @@ const UI = (function () {
     }).join('');
   }
 
-  function render() {
-    renderResources();
-    renderSpots();
-    renderCraftingQueue();
+  function handleCraft(spotId, recipeId) {
+    const result = Crafting.startCrafting(spotId, recipeId);
+    if (!result.success) {
+      alert(result.reason);
+      return;
+    }
+    SaveLoad.save();
+    render();
+  }
+
+  // ========== 建築分頁：建造新建築 + 採集點升級 ==========
+
+  function renderConstructionTab() {
+    const state = GameState.get();
+    const container = document.getElementById('construction-list');
+    if (!container) return;
+
+    container.innerHTML = Object.keys(GATHERING_SPOTS).map(spotId => {
+      const spotDef = GATHERING_SPOTS[spotId];
+      const spotState = state.spots[spotId];
+      const availableBuildings = Object.values(BUILDINGS).filter(b => b.spot === spotId);
+
+      const buildingsHtml = availableBuildings.map(b => {
+        const built = GameState.hasBuilding(spotId, b.id);
+        const locked = spotState.level < b.unlockLevel;
+
+        if (built) {
+          return `<div class="building built">✅ ${b.icon} ${b.name}（已建造）</div>`;
+        }
+        if (locked) {
+          return `<div class="building locked">🔒 ${b.icon} ${b.name}（需採集點等級 ${b.unlockLevel}）</div>`;
+        }
+
+        const costText = b.cost ? formatCost(b.cost) : '免費';
+        const affordable = b.cost ? GameState.hasResources(b.cost) : true;
+        return `
+          <div class="building buildable">
+            <div class="building-row">${b.icon} ${b.name}
+              <button class="${affordable ? '' : 'disabled-look'}" onclick="UI.handleBuild('${spotId}', '${b.id}')">建造</button>
+            </div>
+            <div class="cost-text">需要：${costText}</div>
+          </div>`;
+      }).join('');
+
+      const nextLevel = SPOT_LEVELS[spotState.level];
+      const upgradeHtml = nextLevel
+        ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
+        : `<span class="max-level">已達最高等級</span>`;
+
+      return `
+        <div class="spot-card">
+          <h3>${spotDef.icon} ${spotDef.name}（Lv.${spotState.level}）</h3>
+          <div class="buildings">${buildingsHtml}</div>
+          <div class="upgrade">${upgradeHtml}</div>
+        </div>`;
+    }).join('');
   }
 
   function handleBuild(spotId, buildingId) {
@@ -173,7 +377,7 @@ const UI = (function () {
   function handleUpgradeSpot(spotId) {
     const state = GameState.get();
     const spotState = state.spots[spotId];
-    const nextLevel = SPOT_LEVELS[spotState.level]; // 目前 level 是 1-based, 陣列是 0-based，剛好對應下一級
+    const nextLevel = SPOT_LEVELS[spotState.level];
     if (!nextLevel) return;
 
     if (!GameState.spendResources(nextLevel.upgradeCost)) {
@@ -185,73 +389,7 @@ const UI = (function () {
     render();
   }
 
-  function handleCraft(spotId, recipeId) {
-    const result = Crafting.startCrafting(spotId, recipeId);
-    if (!result.success) {
-      alert(result.reason);
-      return;
-    }
-    SaveLoad.save();
-    render();
-  }
-
-  function handleManualGather(spotId) {
-    const result = Gathering.manualGather(spotId);
-    if (!result.success) {
-      // 冷卻中，不特別跳警示框（太打擾），畫面上按鈕本身已經顯示冷卻秒數
-      render();
-      return;
-    }
-    const def = RESOURCES[result.resourceId];
-    notifyManualGather(def);
-    SaveLoad.save();
-    render();
-  }
-
-  function notifyManualGather(resourceDef) {
-    const container = document.getElementById('notifications');
-    if (!container || !resourceDef) return;
-    const div = document.createElement('div');
-    div.className = 'notification';
-    div.textContent = `${resourceDef.icon} 獲得 ${resourceDef.name} +1`;
-    container.appendChild(div);
-    setTimeout(() => div.remove(), 2000);
-  }
-
-  function notifyCraftingCompleted(completedJobs) {
-    const container = document.getElementById('notifications');
-    if (!container) return;
-    completedJobs.forEach(job => {
-      const recipe = RECIPES[job.recipeId];
-      const div = document.createElement('div');
-      div.className = 'notification';
-      div.textContent = `✅ 加工完成：${formatRecipeLabel(recipe)}`;
-      container.appendChild(div);
-      setTimeout(() => div.remove(), 4000);
-    });
-  }
-
-  function showOfflineReport(report) {
-    if (report.offlineSeconds < 5) return; // 太短就不用顯示
-
-    const gatheredText = Object.entries(report.gathered)
-      .filter(([, amt]) => amt >= 1)
-      .map(([resId, amt]) => `${RESOURCES[resId] ? RESOURCES[resId].name : resId} +${Math.floor(amt)}`)
-      .join('、') || '（無明顯產出）';
-
-    const craftedText = report.craftingCompleted.length > 0
-      ? report.craftingCompleted.map(j => formatRecipeLabel(RECIPES[j.recipeId])).join('、')
-      : '（無完成的加工工作）';
-
-    const hours = Math.floor(report.offlineSeconds / 3600);
-    const minutes = Math.floor((report.offlineSeconds % 3600) / 60);
-
-    alert(
-      `離線 ${hours} 小時 ${minutes} 分鐘\n\n` +
-      `採集產出：${gatheredText}\n` +
-      `加工完成：${craftedText}`
-    );
-  }
+  // ========== 存檔管理（在人物資訊分頁裡） ==========
 
   function formatSlotTimestamp(ts) {
     if (!ts) return '';
@@ -292,26 +430,10 @@ const UI = (function () {
     container.innerHTML = html;
   }
 
-  function toggleSavePanel() {
-    const overlay = document.getElementById('save-overlay');
-    if (!overlay) return;
-    overlay.classList.toggle('hidden');
-    if (!overlay.classList.contains('hidden')) {
-      renderSaveSlots();
-    }
-  }
-
-  function closeSavePanelIfBackdrop(event) {
-    if (event.target.id === 'save-overlay') {
-      toggleSavePanel();
-    }
-  }
-
   function handleSaveToSlot(slotIndex) {
     const activeSlot = SaveLoad.getActiveSlot();
     const meta = SaveLoad.getSlotMeta(slotIndex);
 
-    // 存到別的格子、而且那格已經有別的進度時，先確認避免誤蓋
     if (slotIndex !== activeSlot && !meta.empty) {
       const ok = confirm(`存檔格 ${slotIndex} 已經有其他進度，存檔會覆蓋掉它，確定要覆蓋嗎？`);
       if (!ok) return;
@@ -326,13 +448,9 @@ const UI = (function () {
     const activeSlot = SaveLoad.getActiveSlot();
     if (slotIndex === activeSlot) return;
 
-    // 切換前先把目前進度存回原本的格子，避免遺失
     SaveLoad.save(activeSlot);
-
     const report = SaveLoad.loadSlot(slotIndex);
     render();
-    renderSaveSlots();
-    toggleSavePanel();
     UI.showOfflineReport(report);
   }
 
@@ -344,9 +462,10 @@ const UI = (function () {
 
     SaveLoad.clearSlot(slotIndex);
     render();
-    renderSaveSlots();
     notifySimple(`存檔格 ${slotIndex} 已清空`);
   }
+
+  // ========== 通知 ==========
 
   function notifySimple(text) {
     const container = document.getElementById('notifications');
@@ -358,69 +477,59 @@ const UI = (function () {
     setTimeout(() => div.remove(), 2500);
   }
 
-  function renderProbabilityContent(spotId) {
-    const spotDef = GATHERING_SPOTS[spotId];
-    const state = GameState.get();
-    const currentLevel = state.spots[spotId].level;
-    const spotTables = DROP_TABLES[spotId] || {};
-    const levels = Object.keys(spotTables).map(Number).sort((a, b) => a - b);
-
-    const levelsHtml = levels.map(lv => {
-      const table = spotTables[lv];
-      const totalWeight = table.reduce((s, e) => s + e.weight, 0);
-      const isCurrent = lv === currentLevel;
-      const isLocked = lv > currentLevel;
-
-      const rowsHtml = table
-        .slice()
-        .sort((a, b) => b.weight - a.weight)
-        .map(entry => {
-          const def = RESOURCES[entry.resource];
-          const pct = ((entry.weight / totalWeight) * 100).toFixed(1);
-          const isNew = entry.newAtLevel === lv;
-          return `<div class="prob-row">
-            <span class="prob-name">${def ? def.icon : ''} ${def ? def.name : entry.resource}${isNew ? ' <span class="new-tag">NEW</span>' : ''}</span>
-            <span class="prob-pct">${pct}%</span>
-          </div>`;
-        }).join('');
-
-      return `
-        <div class="prob-level-block ${isCurrent ? 'current-level' : ''} ${isLocked ? 'locked-level' : ''}">
-          <div class="prob-level-title">Lv.${lv} ${isCurrent ? '（目前等級）' : isLocked ? '（尚未達到）' : ''}</div>
-          <div class="prob-rows">${rowsHtml}</div>
-        </div>`;
-    }).join('');
-
-    return `
-      <h2 class="section-title">${spotDef.icon} ${spotDef.name} — 徒手採集機率表</h2>
-      <p class="prob-hint">等級越高，開放的物品種類越多；原本物品的單次機率會被稀釋，但採集點升級也會提高自動生產的產量倍率。</p>
-      <div class="prob-level-list">${levelsHtml}</div>`;
+  function notifyCraftingCompleted(completedJobs) {
+    const container = document.getElementById('notifications');
+    if (!container) return;
+    completedJobs.forEach(job => {
+      const recipe = RECIPES[job.recipeId];
+      const div = document.createElement('div');
+      div.className = 'notification';
+      div.textContent = `✅ 加工完成：${formatRecipeLabel(recipe)}`;
+      container.appendChild(div);
+      setTimeout(() => div.remove(), 4000);
+    });
   }
 
-  function openProbabilityPanel(spotId) {
-    const overlay = document.getElementById('probability-overlay');
-    const content = document.getElementById('probability-panel-content');
-    if (!overlay || !content) return;
-    content.innerHTML = renderProbabilityContent(spotId);
-    overlay.classList.remove('hidden');
+  function showOfflineReport(report) {
+    if (report.offlineSeconds < 5) return;
+
+    const gatheredText = Object.entries(report.gathered)
+      .filter(([, amt]) => amt >= 1)
+      .map(([resId, amt]) => `${RESOURCES[resId] ? RESOURCES[resId].name : resId} +${Math.floor(amt)}`)
+      .join('、') || '（無明顯產出）';
+
+    const craftedText = report.craftingCompleted.length > 0
+      ? report.craftingCompleted.map(j => formatRecipeLabel(RECIPES[j.recipeId])).join('、')
+      : '（無完成的加工工作）';
+
+    const hours = Math.floor(report.offlineSeconds / 3600);
+    const minutes = Math.floor((report.offlineSeconds % 3600) / 60);
+
+    alert(
+      `離線 ${hours} 小時 ${minutes} 分鐘\n\n` +
+      `採集產出：${gatheredText}\n` +
+      `加工完成：${craftedText}`
+    );
   }
 
-  function closeProbabilityPanel() {
-    const overlay = document.getElementById('probability-overlay');
-    if (overlay) overlay.classList.add('hidden');
-  }
+  // ========== 總渲染入口 ==========
 
-  function closeProbabilityPanelIfBackdrop(event) {
-    if (event.target.id === 'probability-overlay') {
-      closeProbabilityPanel();
-    }
+  function render() {
+    renderResources();
+    renderCharacterPanel();
+    renderFoodList();
+    renderSaveSlots();
+    renderProductionTab();
+    renderCraftingTab();
+    renderCraftingQueue();
+    renderConstructionTab();
   }
 
   return {
-    render, handleBuild, handleUpgradeSpot, handleCraft, handleManualGather,
+    render, switchTab,
+    handleBuild, handleUpgradeSpot, handleCraft, handleManualGather, handleEatFood,
+    toggleProbabilityView,
     notifyCraftingCompleted, showOfflineReport,
-    toggleSavePanel, closeSavePanelIfBackdrop,
-    handleSaveToSlot, handleLoadSlot, handleClearSlot,
-    openProbabilityPanel, closeProbabilityPanel, closeProbabilityPanelIfBackdrop
+    handleSaveToSlot, handleLoadSlot, handleClearSlot
   };
 })();

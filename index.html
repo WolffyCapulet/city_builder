@@ -11,46 +11,59 @@
   <header class="game-header">
     <h1>⚔️ 城 主 村 莊 ⚔️</h1>
     <p class="subtitle">— 重製版 —</p>
-    <button class="save-panel-toggle" onclick="UI.toggleSavePanel()">💾 存檔管理</button>
   </header>
-
-  <!-- 存檔管理面板（預設隱藏） -->
-  <div id="save-overlay" class="save-overlay hidden" onclick="UI.closeSavePanelIfBackdrop(event)">
-    <div class="save-panel">
-      <h2 class="section-title">💾 存檔管理</h2>
-      <div id="save-slot-list" class="save-slot-list"></div>
-      <button class="close-panel-btn" onclick="UI.toggleSavePanel()">關閉</button>
-    </div>
-  </div>
-
-  <!-- 採集機率表面板（預設隱藏） -->
-  <div id="probability-overlay" class="save-overlay hidden" onclick="UI.closeProbabilityPanelIfBackdrop(event)">
-    <div class="save-panel">
-      <div id="probability-panel-content"></div>
-      <button class="close-panel-btn" onclick="UI.closeProbabilityPanel()">關閉</button>
-    </div>
-  </div>
 
   <!-- 上方固定資源列 -->
   <div id="resource-bar" class="resource-bar">
     <div id="resource-list" class="resource-list"></div>
   </div>
 
-  <main id="app">
+  <div class="layout">
+    <!-- 側邊欄：分頁切換 -->
+    <nav class="side-nav">
+      <button class="nav-btn active" data-tab="character" onclick="UI.switchTab('character')">🧑 人物資訊</button>
+      <button class="nav-btn" data-tab="production" onclick="UI.switchTab('production')">🌾 生產</button>
+      <button class="nav-btn" data-tab="crafting" onclick="UI.switchTab('crafting')">⚒️ 加工</button>
+      <button class="nav-btn" data-tab="construction" onclick="UI.switchTab('construction')">🏗️ 建築</button>
+    </nav>
 
-    <!-- 村莊地圖區塊：四個採集點以 2x2 版面呈現 -->
-    <section class="map-section">
-      <h2 class="section-title">🗺️ 村莊地圖</h2>
-      <div id="spot-list" class="spot-map"></div>
-    </section>
+    <main class="main-content">
 
-    <!-- 加工佇列 -->
-    <section class="queue-section">
-      <h2 class="section-title">⚒️ 加工佇列</h2>
-      <div id="crafting-queue" class="queue-panel"></div>
-    </section>
+      <!-- 人物資訊分頁：等級/經驗值/體力/進食/存檔管理 -->
+      <section id="tab-character" class="tab-panel">
+        <h2 class="section-title">🧑 人物資訊</h2>
+        <div id="character-panel"></div>
 
-  </main>
+        <h2 class="section-title">🍖 食用補充體力</h2>
+        <div id="food-list" class="food-list"></div>
+
+        <h2 class="section-title">💾 存檔管理</h2>
+        <div id="save-slot-list" class="save-slot-list"></div>
+      </section>
+
+      <!-- 生產分頁：採集點狀態、自動生產進度、徒手採集、機率表 -->
+      <section id="tab-production" class="tab-panel hidden">
+        <h2 class="section-title">🗺️ 村莊地圖</h2>
+        <div id="production-list" class="spot-map"></div>
+      </section>
+
+      <!-- 加工分頁：所有已建成的加工建築與配方、加工佇列 -->
+      <section id="tab-crafting" class="tab-panel hidden">
+        <h2 class="section-title">⚒️ 加工作坊</h2>
+        <div id="crafting-buildings-list"></div>
+
+        <h2 class="section-title">📋 加工佇列</h2>
+        <div id="crafting-queue" class="queue-panel"></div>
+      </section>
+
+      <!-- 建築分頁：尚未建造的建築、採集點升級 -->
+      <section id="tab-construction" class="tab-panel hidden">
+        <h2 class="section-title">🏗️ 建築工程</h2>
+        <div id="construction-list" class="spot-map"></div>
+      </section>
+
+    </main>
+  </div>
 
   <div id="notifications" class="notifications"></div>
 
@@ -61,6 +74,7 @@
   <script src="data/recipes.js"></script>
   <script src="data/production.js"></script>
   <script src="data/dropTables.js"></script>
+  <script src="data/food.js"></script>
 
   <!-- Core 層 -->
   <script src="js/core/gameState.js"></script>
@@ -70,6 +84,7 @@
   <!-- Systems 層 -->
   <script src="js/systems/gathering.js"></script>
   <script src="js/systems/crafting.js"></script>
+  <script src="js/systems/character.js"></script>
 
   <!-- UI 層 -->
   <script src="js/ui/render.js"></script>

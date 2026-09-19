@@ -67,9 +67,20 @@ const Gathering = (function () {
   }
 
   // 玩家手動點擊採集（不需要建築）：依照採集點目前等級，從對應的機率表加權隨機挑一種
-  // 有冷卻時間避免瘋狂連點洗資源
+  // 有冷卻時間避免瘋狂連點洗資源，同時會消耗體力、獲得經驗值
   const MANUAL_GATHER_COOLDOWN_MS = 3000;
   const MANUAL_GATHER_AMOUNT = 1;
+  const MANUAL_GATHER_STAMINA_COST = 1;
+  const MANUAL_GATHER_EXP_GAIN = 3;
+
+  // 人物等級加成：等級每高 1 級，「該等級才解鎖」的進階物品權重提高 5%
+  // （原本 Lv.1 就有的基礎物品不受影響），讓練等之後徒手採集比較容易拿到好東西
+  const CHARACTER_BONUS_PER_LEVEL = 0.05;
+
+  function getCharacterRarityMultiplier() {
+    const level = GameState.get().character.level;
+    return 1 + (level - 1) * CHARACTER_BONUS_PER_LEVEL;
+  }
 
   // 取得某採集點在指定等級可用的機率表（找不到該等級時，使用小於等於該等級的最高可用等級）
   function getDropTable(spotId, level) {
@@ -86,6 +97,24 @@ const Gathering = (function () {
     return spotTables[fallback] || [];
   }
 
+  // 套用人物等級加成後的「有效權重表」：newAtLevel > 1 的進階物品權重會被放大
+  // 回傳 [{ resource, effectiveWeight, baseWeight, newAtLevel }]，供實際抽取跟畫面顯示共用
+  function getEffectiveDropTable(spotId, level) {
+    const table = getDropTable(spotId, level);
+    const bonusMultiplier = getCharacterRarityMultiplier();
+
+    return table.map(entry => {
+      const isAdvanced = !!entry.newAtLevel && entry.newAtLevel > 1;
+      const effectiveWeight = isAdvanced ? entry.weight * bonusMultiplier : entry.weight;
+      return {
+        resource: entry.resource,
+        baseWeight: entry.weight,
+        effectiveWeight,
+        newAtLevel: entry.newAtLevel
+      };
+    });
+  }
+
   function manualGather(spotId) {
     const state = GameState.get();
     const spotState = state.spots[spotId];
@@ -97,24 +126,29 @@ const Gathering = (function () {
       return { success: false, reason: `冷卻中，還要等 ${remain} 秒` };
     }
 
-    const table = getDropTable(spotId, spotState.level);
+    if (!GameState.spendStamina(MANUAL_GATHER_STAMINA_COST)) {
+      return { success: false, reason: '體力不足，等待恢復或吃東西補充體力吧' };
+    }
+
+    const table = getEffectiveDropTable(spotId, spotState.level);
     if (table.length === 0) return { success: false, reason: '這個採集點目前沒有可採集的物品' };
 
-    const totalWeight = table.reduce((sum, e) => sum + e.weight, 0);
+    const totalWeight = table.reduce((sum, e) => sum + e.effectiveWeight, 0);
     let roll = Math.random() * totalWeight;
     let resourceId = table[table.length - 1].resource; // fallback
     for (const entry of table) {
-      if (roll < entry.weight) {
+      if (roll < entry.effectiveWeight) {
         resourceId = entry.resource;
         break;
       }
-      roll -= entry.weight;
+      roll -= entry.effectiveWeight;
     }
 
     GameState.addResource(resourceId, MANUAL_GATHER_AMOUNT);
+    GameState.addExp(MANUAL_GATHER_EXP_GAIN);
     spotState.lastManualGatherAt = now;
 
-    return { success: true, resourceId, amount: MANUAL_GATHER_AMOUNT };
+    return { success: true, resourceId, amount: MANUAL_GATHER_AMOUNT, expGained: MANUAL_GATHER_EXP_GAIN };
   }
 
   function getManualGatherCooldownRemaining(spotId) {
@@ -128,7 +162,8 @@ const Gathering = (function () {
   return {
     calcBuildingProduction, calcAllProduction, applyProduction,
     manualGather, getManualGatherCooldownRemaining, getDropTable,
-    MANUAL_GATHER_COOLDOWN_MS
+    getEffectiveDropTable, getCharacterRarityMultiplier,
+    MANUAL_GATHER_COOLDOWN_MS, MANUAL_GATHER_STAMINA_COST
   };
 })();
 

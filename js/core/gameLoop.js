@@ -20,6 +20,9 @@ const GameLoop = (function () {
       productionCounter = 0;
     }
 
+    // 體力自動恢復：每 5 秒 +1（由 Character 模組自己控制節奏）
+    Character.tickRegen();
+
     // 加工佇列每秒都要檢查（時間到就要完成，不能跟生產一樣延遲）
     const completed = Crafting.processQueue(Date.now());
     if (completed.length > 0 && typeof UI !== 'undefined') {
