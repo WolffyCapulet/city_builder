@@ -2,23 +2,17 @@
 
 const UI = (function () {
 
-  // 採集建築的視覺生產週期長度（秒）。純視覺用，方便玩家看到「正在生產」，
-  // 實際資源數量仍依 production.js 的每秒速率持續累加，不受這個週期影響。
-  const GATHER_CYCLE_SECONDS = 8;
+  // 採集建築的視覺生產週期長度（秒）。跟 GameLoop 的自動生產結算週期一致，
+  // 讓進度條跑滿的瞬間，就是實際資源到手的瞬間。
+  const GATHER_CYCLE_SECONDS = 10;
 
   function formatAmount(n) {
     return Math.floor(n).toLocaleString('zh-Hant');
   }
 
-  // 計算採集建築目前的生產週期進度（0~100）
-  function getGatherProgress(buildingState) {
-    if (!buildingState.builtAt) {
-      buildingState.builtAt = Date.now(); // 相容舊存檔：第一次看到時補上時間戳
-    }
-    const elapsedMs = Date.now() - buildingState.builtAt;
-    const cycleMs = GATHER_CYCLE_SECONDS * 1000;
-    const progress = (elapsedMs % cycleMs) / cycleMs;
-    return Math.floor(progress * 100);
+  // 計算目前這一輪自動生產的進度（0~100），所有採集建築共用同一個節奏
+  function getGatherProgress() {
+    return GameLoop.getProductionProgress();
   }
 
   // 產出資源的圖示列（給進度條旁邊看的）
@@ -78,9 +72,8 @@ const UI = (function () {
             ).join(' ');
             return `<div class="building built">✅ ${b.icon} ${b.name} ${recipeButtons}</div>`;
           }
-          // 採集型建築：顯示生產週期進度條
-          const buildingState = state.spots[spotId].buildings[b.id];
-          const progress = getGatherProgress(buildingState);
+          // 採集型建築：顯示生產週期進度條（跟其他採集建築共用同一個節奏）
+          const progress = getGatherProgress();
           const produceIcons = getBuildingProduceIcons(b.id);
           return `
             <div class="building built gathering">
@@ -117,7 +110,10 @@ const UI = (function () {
           <h3>${spotDef.icon} ${spotDef.name}（Lv.${spotState.level}）</h3>
           <p class="spot-desc">${spotDef.description}</p>
           <p class="spot-bonus">產量倍率 x${levelData.quantityMultiplier}　稀有加成 +${levelData.rarityBonus}%</p>
-          <button class="manual-gather-btn" ${manualBtnDisabled} onclick="UI.handleManualGather('${spotId}')">${manualBtnLabel}</button>
+          <div class="spot-btn-row">
+            <button class="manual-gather-btn" ${manualBtnDisabled} onclick="UI.handleManualGather('${spotId}')">${manualBtnLabel}</button>
+            <button class="probability-btn" onclick="UI.openProbabilityPanel('${spotId}')">📊 機率表</button>
+          </div>
           <div class="buildings">${buildingsHtml}</div>
           <div class="upgrade">${upgradeHtml}</div>
         </div>
@@ -362,10 +358,69 @@ const UI = (function () {
     setTimeout(() => div.remove(), 2500);
   }
 
+  function renderProbabilityContent(spotId) {
+    const spotDef = GATHERING_SPOTS[spotId];
+    const state = GameState.get();
+    const currentLevel = state.spots[spotId].level;
+    const spotTables = DROP_TABLES[spotId] || {};
+    const levels = Object.keys(spotTables).map(Number).sort((a, b) => a - b);
+
+    const levelsHtml = levels.map(lv => {
+      const table = spotTables[lv];
+      const totalWeight = table.reduce((s, e) => s + e.weight, 0);
+      const isCurrent = lv === currentLevel;
+      const isLocked = lv > currentLevel;
+
+      const rowsHtml = table
+        .slice()
+        .sort((a, b) => b.weight - a.weight)
+        .map(entry => {
+          const def = RESOURCES[entry.resource];
+          const pct = ((entry.weight / totalWeight) * 100).toFixed(1);
+          const isNew = entry.newAtLevel === lv;
+          return `<div class="prob-row">
+            <span class="prob-name">${def ? def.icon : ''} ${def ? def.name : entry.resource}${isNew ? ' <span class="new-tag">NEW</span>' : ''}</span>
+            <span class="prob-pct">${pct}%</span>
+          </div>`;
+        }).join('');
+
+      return `
+        <div class="prob-level-block ${isCurrent ? 'current-level' : ''} ${isLocked ? 'locked-level' : ''}">
+          <div class="prob-level-title">Lv.${lv} ${isCurrent ? '（目前等級）' : isLocked ? '（尚未達到）' : ''}</div>
+          <div class="prob-rows">${rowsHtml}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <h2 class="section-title">${spotDef.icon} ${spotDef.name} — 徒手採集機率表</h2>
+      <p class="prob-hint">等級越高，開放的物品種類越多；原本物品的單次機率會被稀釋，但採集點升級也會提高自動生產的產量倍率。</p>
+      <div class="prob-level-list">${levelsHtml}</div>`;
+  }
+
+  function openProbabilityPanel(spotId) {
+    const overlay = document.getElementById('probability-overlay');
+    const content = document.getElementById('probability-panel-content');
+    if (!overlay || !content) return;
+    content.innerHTML = renderProbabilityContent(spotId);
+    overlay.classList.remove('hidden');
+  }
+
+  function closeProbabilityPanel() {
+    const overlay = document.getElementById('probability-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  function closeProbabilityPanelIfBackdrop(event) {
+    if (event.target.id === 'probability-overlay') {
+      closeProbabilityPanel();
+    }
+  }
+
   return {
     render, handleBuild, handleUpgradeSpot, handleCraft, handleManualGather,
     notifyCraftingCompleted, showOfflineReport,
     toggleSavePanel, closeSavePanelIfBackdrop,
-    handleSaveToSlot, handleLoadSlot, handleClearSlot
+    handleSaveToSlot, handleLoadSlot, handleClearSlot,
+    openProbabilityPanel, closeProbabilityPanel, closeProbabilityPanelIfBackdrop
   };
 })();

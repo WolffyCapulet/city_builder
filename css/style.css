@@ -296,10 +296,99 @@ body {
   font-weight: bold;
 }
 
-.manual-gather-btn {
-  display: block;
-  width: 100%;
+.spot-btn-row {
+  display: flex;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.spot-btn-row .manual-gather-btn {
+  flex: 2;
+  margin-bottom: 0;
+}
+
+.probability-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 6px;
+  border: 1px solid #7a561f;
+  background: linear-gradient(180deg, #dce8f5 0%, #b7cfe8 100%);
+  color: #1f3a4a;
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #4a6b7a;
+}
+
+.probability-btn:hover {
+  background: linear-gradient(180deg, #e8f2fc 0%, #c8dcf0 100%);
+}
+
+.prob-hint {
+  font-size: 12.5px;
+  color: #8a7550;
+  margin-bottom: 14px;
+}
+
+.prob-level-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prob-level-block {
+  background: #fffaf0;
+  border: 1px solid #c9ac74;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.prob-level-block.current-level {
+  border: 2px solid #a06a2c;
+  background: #fff3d9;
+}
+
+.prob-level-block.locked-level {
+  opacity: 0.55;
+}
+
+.prob-level-title {
+  font-weight: bold;
+  color: #5c4326;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.prob-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.prob-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #4a3820;
+  padding: 2px 0;
+  border-bottom: 1px dashed #e5d9bd;
+}
+
+.prob-pct {
+  font-weight: bold;
+  color: #a06a2c;
+}
+
+.new-tag {
+  font-size: 10px;
+  background: #7fae5c;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.manual-gather-btn {
   padding: 8px 0;
   border-radius: 6px;
   border: 1px solid #7a561f;

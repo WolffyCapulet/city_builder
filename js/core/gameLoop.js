@@ -1,17 +1,26 @@
 // gameLoop.js
-// 每秒執行一次：在線期間持續生產資源、檢查加工佇列、更新畫面、定期自動存檔
+// 每秒執行一次畫面更新與加工檢查；自動採集（建築生產）改為每 10 秒才結算一次一批，
+// 讓「自動生產」跟「手動採集」都有清楚的節奏感，而不是連續不間斷的小數累加
 
 const GameLoop = (function () {
   let tickInterval = null;
+  let productionCounter = 0;
   let saveCounter = 0;
-  const SAVE_EVERY_N_TICKS = 10; // 每 10 秒自動存檔一次
+
+  const PRODUCTION_INTERVAL_SECONDS = 10; // 自動採集：每 10 秒結算一次
+  const SAVE_EVERY_N_TICKS = 10;          // 每 10 秒自動存檔一次
 
   function tick() {
-    // 1 秒鐘的線上產出
-    const produced = Gathering.calcAllProduction(1);
-    Gathering.applyProduction(produced);
+    productionCounter++;
 
-    // 檢查是否有加工完成
+    // 每 10 秒才結算一次自動生產（累積這 10 秒份的產出，一次發放）
+    if (productionCounter >= PRODUCTION_INTERVAL_SECONDS) {
+      const produced = Gathering.calcAllProduction(PRODUCTION_INTERVAL_SECONDS);
+      Gathering.applyProduction(produced);
+      productionCounter = 0;
+    }
+
+    // 加工佇列每秒都要檢查（時間到就要完成，不能跟生產一樣延遲）
     const completed = Crafting.processQueue(Date.now());
     if (completed.length > 0 && typeof UI !== 'undefined') {
       UI.notifyCraftingCompleted(completed);
@@ -28,6 +37,10 @@ const GameLoop = (function () {
     }
   }
 
+  function getProductionProgress() {
+    return Math.floor((productionCounter / PRODUCTION_INTERVAL_SECONDS) * 100);
+  }
+
   function start() {
     if (tickInterval) return; // 避免重複啟動
     tickInterval = setInterval(tick, 1000);
@@ -38,7 +51,7 @@ const GameLoop = (function () {
     tickInterval = null;
   }
 
-  return { start, stop };
+  return { start, stop, getProductionProgress, PRODUCTION_INTERVAL_SECONDS };
 })();
 
 if (typeof module !== 'undefined') {

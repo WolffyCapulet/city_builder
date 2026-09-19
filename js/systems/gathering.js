@@ -66,10 +66,25 @@ const Gathering = (function () {
     });
   }
 
-  // 玩家手動點擊採集（不需要建築）：從該採集點的資源池中隨機挑一種、給予少量資源
+  // 玩家手動點擊採集（不需要建築）：依照採集點目前等級，從對應的機率表加權隨機挑一種
   // 有冷卻時間避免瘋狂連點洗資源
-  const MANUAL_GATHER_COOLDOWN_MS = 2000;
+  const MANUAL_GATHER_COOLDOWN_MS = 3000;
   const MANUAL_GATHER_AMOUNT = 1;
+
+  // 取得某採集點在指定等級可用的機率表（找不到該等級時，使用小於等於該等級的最高可用等級）
+  function getDropTable(spotId, level) {
+    const spotTables = DROP_TABLES[spotId];
+    if (!spotTables) return [];
+    if (spotTables[level]) return spotTables[level];
+
+    // 找不到剛好對應的等級時，往下找最接近的等級
+    const availableLevels = Object.keys(spotTables).map(Number).sort((a, b) => a - b);
+    let fallback = availableLevels[0];
+    availableLevels.forEach(lv => {
+      if (lv <= level) fallback = lv;
+    });
+    return spotTables[fallback] || [];
+  }
 
   function manualGather(spotId) {
     const state = GameState.get();
@@ -82,8 +97,20 @@ const Gathering = (function () {
       return { success: false, reason: `冷卻中，還要等 ${remain} 秒` };
     }
 
-    const pool = GATHERING_SPOTS[spotId].resourcePool;
-    const resourceId = pool[Math.floor(Math.random() * pool.length)];
+    const table = getDropTable(spotId, spotState.level);
+    if (table.length === 0) return { success: false, reason: '這個採集點目前沒有可採集的物品' };
+
+    const totalWeight = table.reduce((sum, e) => sum + e.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let resourceId = table[table.length - 1].resource; // fallback
+    for (const entry of table) {
+      if (roll < entry.weight) {
+        resourceId = entry.resource;
+        break;
+      }
+      roll -= entry.weight;
+    }
+
     GameState.addResource(resourceId, MANUAL_GATHER_AMOUNT);
     spotState.lastManualGatherAt = now;
 
@@ -100,7 +127,8 @@ const Gathering = (function () {
 
   return {
     calcBuildingProduction, calcAllProduction, applyProduction,
-    manualGather, getManualGatherCooldownRemaining
+    manualGather, getManualGatherCooldownRemaining, getDropTable,
+    MANUAL_GATHER_COOLDOWN_MS
   };
 })();
 

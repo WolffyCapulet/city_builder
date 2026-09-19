@@ -23,6 +23,14 @@
     </div>
   </div>
 
+  <!-- 採集機率表面板（預設隱藏） -->
+  <div id="probability-overlay" class="save-overlay hidden" onclick="UI.closeProbabilityPanelIfBackdrop(event)">
+    <div class="save-panel">
+      <div id="probability-panel-content"></div>
+      <button class="close-panel-btn" onclick="UI.closeProbabilityPanel()">關閉</button>
+    </div>
+  </div>
+
   <!-- 上方固定資源列 -->
   <div id="resource-bar" class="resource-bar">
     <div id="resource-list" class="resource-list"></div>
@@ -52,6 +60,7 @@
   <script src="data/buildings.js"></script>
   <script src="data/recipes.js"></script>
   <script src="data/production.js"></script>
+  <script src="data/dropTables.js"></script>
 
   <!-- Core 層 -->
   <script src="js/core/gameState.js"></script>
