@@ -93,6 +93,20 @@ const GameState = (function () {
     return !!(spot && spot.buildings[buildingId] && spot.buildings[buildingId].built);
   }
 
+  function getBuildingLevel(spotId, buildingId) {
+    const spot = state.spots[spotId];
+    if (!spot || !spot.buildings[buildingId]) return 0;
+    return spot.buildings[buildingId].level || 1;
+  }
+
+  // 建築物獨立升級（跟採集點本身的等級是分開的兩件事）
+  function upgradeBuilding(spotId, buildingId) {
+    const spot = state.spots[spotId];
+    if (!spot || !spot.buildings[buildingId]) return false;
+    spot.buildings[buildingId].level += 1;
+    return true;
+  }
+
   // ===== 人物：經驗值 / 等級 / 體力 =====
 
   function expNeededForLevel(level) {
@@ -124,7 +138,7 @@ const GameState = (function () {
   return {
     init, get, set,
     addResource, removeResource, hasResources, spendResources,
-    buildBuilding, hasBuilding,
+    buildBuilding, hasBuilding, getBuildingLevel, upgradeBuilding,
     expNeededForLevel, addExp, spendStamina, addStamina
   };
 })();

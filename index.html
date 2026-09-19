@@ -13,15 +13,15 @@
     <p class="subtitle">— 重製版 —</p>
   </header>
 
-  <!-- 上方固定資源列 -->
-  <div id="resource-bar" class="resource-bar">
-    <div id="resource-list" class="resource-list"></div>
+  <!-- 上方固定人物資訊列（原本放倉庫的位置） -->
+  <div id="character-top-bar" class="character-top-bar">
+    <div id="character-panel"></div>
   </div>
 
   <div class="layout">
     <!-- 側邊欄：分頁切換 -->
     <nav class="side-nav">
-      <button class="nav-btn active" data-tab="character" onclick="UI.switchTab('character')">🧑 人物資訊</button>
+      <button class="nav-btn active" data-tab="warehouse" onclick="UI.switchTab('warehouse')">🏠 倉庫</button>
       <button class="nav-btn" data-tab="production" onclick="UI.switchTab('production')">🌾 生產</button>
       <button class="nav-btn" data-tab="crafting" onclick="UI.switchTab('crafting')">⚒️ 加工</button>
       <button class="nav-btn" data-tab="construction" onclick="UI.switchTab('construction')">🏗️ 建築</button>
@@ -29,10 +29,10 @@
 
     <main class="main-content">
 
-      <!-- 人物資訊分頁：等級/經驗值/體力/進食/存檔管理 -->
-      <section id="tab-character" class="tab-panel">
-        <h2 class="section-title">🧑 人物資訊</h2>
-        <div id="character-panel"></div>
+      <!-- 倉庫分頁：資源清單、進食、存檔管理 -->
+      <section id="tab-warehouse" class="tab-panel">
+        <h2 class="section-title">🏠 倉庫</h2>
+        <div id="resource-list" class="resource-list"></div>
 
         <h2 class="section-title">🍖 食用補充體力</h2>
         <div id="food-list" class="food-list"></div>
@@ -56,7 +56,7 @@
         <div id="crafting-queue" class="queue-panel"></div>
       </section>
 
-      <!-- 建築分頁：尚未建造的建築、採集點升級 -->
+      <!-- 建築分頁：建造新建築、建築升級、採集點升級 -->
       <section id="tab-construction" class="tab-panel hidden">
         <h2 class="section-title">🏗️ 建築工程</h2>
         <div id="construction-list" class="spot-map"></div>

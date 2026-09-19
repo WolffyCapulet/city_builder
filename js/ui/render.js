@@ -3,7 +3,7 @@
 
 const UI = (function () {
 
-  let currentTab = 'character';
+  let currentTab = 'warehouse';
 
   function formatAmount(n) {
     return Math.floor(n).toLocaleString('zh-Hant');
@@ -142,6 +142,17 @@ const UI = (function () {
       .join(' ');
   }
 
+  // 顯示「這個建築在目前等級下，每一輪(10秒)確切會產出幾個」——都是整數，不會有 1.3 個這種情況
+  function formatPerCycleOutput(buildingId, buildingLevel) {
+    const production = BUILDING_PRODUCTION[buildingId];
+    if (!production) return '';
+    return Object.entries(production).map(([resId, baseAmount]) => {
+      const def = RESOURCES[resId];
+      const amount = baseAmount * buildingLevel;
+      return `${def ? def.icon : ''}${def ? def.name : resId} +${amount}`;
+    }).join('、');
+  }
+
   function renderProbabilityBlock(spotId) {
     const state = GameState.get();
     const currentLevel = state.spots[spotId].level;
@@ -176,7 +187,7 @@ const UI = (function () {
 
     return `
       <div class="prob-panel">
-        <p class="prob-hint">機率已套用人物等級加成（進階物品 +${Math.round((Gathering.getCharacterRarityMultiplier() - 1) * 100)}%）。等級越高開放的物品種類越多，原本物品機率會被稀釋，但自動生產的產量倍率也會提高。</p>
+        <p class="prob-hint">機率已套用人物等級加成（進階物品 +${Math.round((Gathering.getCharacterRarityMultiplier() - 1) * 100)}%）。採集點等級越高，開放的物品種類越多，原本物品機率會被稀釋；建築本身的產量請到「建築」分頁個別升級。</p>
         <div class="prob-level-list">${levelsHtml}</div>
       </div>`;
   }
@@ -189,7 +200,6 @@ const UI = (function () {
     container.innerHTML = Object.keys(GATHERING_SPOTS).map(spotId => {
       const spotDef = GATHERING_SPOTS[spotId];
       const spotState = state.spots[spotId];
-      const levelData = SPOT_LEVELS[Math.min(spotState.level - 1, SPOT_LEVELS.length - 1)];
 
       const builtGathering = Object.values(BUILDINGS)
         .filter(b => b.spot === spotId && b.type === 'gathering' && GameState.hasBuilding(spotId, b.id));
@@ -197,11 +207,13 @@ const UI = (function () {
       const buildingsHtml = builtGathering.length === 0
         ? '<p class="empty">這裡還沒有任何生產建築，先去「建築」分頁蓋一座吧</p>'
         : builtGathering.map(b => {
+            const buildingLevel = GameState.getBuildingLevel(spotId, b.id);
             const progress = GameLoop.getProductionProgress();
-            const produceIcons = getBuildingProduceIcons(b.id);
+            const outputText = formatPerCycleOutput(b.id, buildingLevel);
             return `
               <div class="building built gathering">
-                <div class="building-row">✅ ${b.icon} ${b.name}<span class="produce-icons">${produceIcons}</span></div>
+                <div class="building-row">✅ ${b.icon} ${b.name}（建築 Lv.${buildingLevel}）</div>
+                <div class="produce-icons">每輪：${outputText}</div>
                 <div class="progress-bar-container">
                   <div class="progress-bar-fill" style="width:${progress}%"></div>
                 </div>
@@ -225,9 +237,9 @@ const UI = (function () {
 
       return `
         <div class="spot-card">
-          <h3>${spotDef.icon} ${spotDef.name}（Lv.${spotState.level}）</h3>
+          <h3>${spotDef.icon} ${spotDef.name}（採集點 Lv.${spotState.level}）</h3>
           <p class="spot-desc">${spotDef.description}</p>
-          <p class="spot-bonus">產量倍率 x${levelData.quantityMultiplier}　稀有加成 +${levelData.rarityBonus}%</p>
+          <p class="spot-bonus">採集點等級只影響解鎖哪些新建築、以及徒手採集的機率表，不影響已建成建築的產量——建築產量請到「建築」分頁個別升級</p>
           <div class="spot-btn-row">
             <button class="manual-gather-btn" ${manualBtnDisabled} onclick="UI.handleManualGather('${spotId}')">${manualBtnLabel}</button>
             <button class="probability-btn" onclick="UI.toggleProbabilityView('${spotId}')">${isExpanded ? '收起機率表' : '📊 機率表'}</button>
@@ -332,7 +344,23 @@ const UI = (function () {
         const locked = spotState.level < b.unlockLevel;
 
         if (built) {
-          return `<div class="building built">✅ ${b.icon} ${b.name}（已建造）</div>`;
+          const level = GameState.getBuildingLevel(spotId, b.id);
+          if (b.type !== 'gathering') {
+            // 加工建築目前先不支援升級（維持 Lv.1），未來可再擴充
+            return `<div class="building built">✅ ${b.icon} ${b.name}（已建造）</div>`;
+          }
+          if (level >= Gathering.MAX_BUILDING_LEVEL) {
+            return `<div class="building built">✅ ${b.icon} ${b.name}（建築 Lv.${level}，已達最高等級）</div>`;
+          }
+          const upgradeCost = Gathering.getBuildingUpgradeCost(b.id, level);
+          const canAffordUpgrade = GameState.hasResources(upgradeCost);
+          return `
+            <div class="building built">
+              <div class="building-row">✅ ${b.icon} ${b.name}（建築 Lv.${level}）
+                <button class="${canAffordUpgrade ? '' : 'disabled-look'}" onclick="UI.handleUpgradeBuilding('${spotId}', '${b.id}')">升級到 Lv.${level + 1}</button>
+              </div>
+              <div class="cost-text">升級需要：${formatCost(upgradeCost)}</div>
+            </div>`;
         }
         if (locked) {
           return `<div class="building locked">🔒 ${b.icon} ${b.name}（需採集點等級 ${b.unlockLevel}）</div>`;
@@ -385,6 +413,20 @@ const UI = (function () {
       return;
     }
     spotState.level = nextLevel.level;
+    SaveLoad.save();
+    render();
+  }
+
+  function handleUpgradeBuilding(spotId, buildingId) {
+    const level = GameState.getBuildingLevel(spotId, buildingId);
+    if (level >= Gathering.MAX_BUILDING_LEVEL) return;
+
+    const cost = Gathering.getBuildingUpgradeCost(buildingId, level);
+    if (!GameState.spendResources(cost)) {
+      alert(`資源不足，升級需要：${formatCost(cost)}`);
+      return;
+    }
+    GameState.upgradeBuilding(spotId, buildingId);
     SaveLoad.save();
     render();
   }
@@ -527,7 +569,7 @@ const UI = (function () {
 
   return {
     render, switchTab,
-    handleBuild, handleUpgradeSpot, handleCraft, handleManualGather, handleEatFood,
+    handleBuild, handleUpgradeSpot, handleUpgradeBuilding, handleCraft, handleManualGather, handleEatFood,
     toggleProbabilityView,
     notifyCraftingCompleted, showOfflineReport,
     handleSaveToSlot, handleLoadSlot, handleClearSlot

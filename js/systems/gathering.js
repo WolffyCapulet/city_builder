@@ -3,34 +3,48 @@
 
 const Gathering = (function () {
 
+  const MAX_BUILDING_LEVEL = 5;
+
   // 計算單一採集點、單一建築在 elapsedSeconds 秒內的產出
+  // 產量 = 基礎產出(整數) x 建築自己的等級(整數) x 經過幾輪生產週期
+  // 「建築等級」跟「採集點等級」是分開的兩件事：
+  //   - 建築等級：決定這個建築本身產多少（整數倍，不會有 1.3 個這種情況）
+  //   - 採集點等級：只決定解鎖哪些新建築、以及徒手採集的機率表
   // 回傳 { resourceId: amount, ... }
   function calcBuildingProduction(spotId, buildingId, elapsedSeconds) {
     const production = BUILDING_PRODUCTION[buildingId];
     if (!production) return {};
 
-    const state = GameState.get();
-    const spotLevel = state.spots[spotId].level;
-    const levelData = SPOT_LEVELS[Math.min(spotLevel - 1, SPOT_LEVELS.length - 1)];
-    const multiplier = levelData.quantityMultiplier;
+    const buildingLevel = GameState.getBuildingLevel(spotId, buildingId) || 1;
+    const cycles = elapsedSeconds / GameLoop.PRODUCTION_INTERVAL_SECONDS; // 允許小數（離線結算用）
 
     const result = {};
-    Object.entries(production).forEach(([resId, ratePerSec]) => {
-      const amount = ratePerSec * multiplier * elapsedSeconds;
-      result[resId] = amount;
+    Object.entries(production).forEach(([resId, baseAmountPerCycle]) => {
+      result[resId] = baseAmountPerCycle * buildingLevel * cycles;
     });
 
-    // 稀有掉落判定（以「期望值」方式線性套用在離線/在線結算上，避免逐秒隨機造成離線計算太慢）
+    // 稀有掉落判定：機率隨建築等級提高（期望值計算，允許小數，這是機率的概念不是實體個數）
     const rareTable = RARE_DROP_TABLE[buildingId];
     if (rareTable) {
       rareTable.forEach(entry => {
-        const rarityBonusMultiplier = 1 + (levelData.rarityBonus / 100);
-        const expectedAmount = entry.chance * rarityBonusMultiplier * elapsedSeconds;
+        const expectedAmount = entry.chance * buildingLevel * cycles;
         result[entry.resource] = (result[entry.resource] || 0) + expectedAmount;
       });
     }
 
     return result;
+  }
+
+  // 建築升級所需資源：以建築原本的建造成本為基準，乘上「目前等級」
+  // （例如原本建造要 branch x15，從 Lv.1 升到 Lv.2 就要 branch x15，Lv.2 升到 Lv.3 要 branch x30...）
+  function getBuildingUpgradeCost(buildingId, currentLevel) {
+    const buildingDef = BUILDINGS[buildingId];
+    if (!buildingDef || !buildingDef.cost) return {};
+    const cost = {};
+    Object.entries(buildingDef.cost).forEach(([resId, amt]) => {
+      cost[resId] = amt * currentLevel;
+    });
+    return cost;
   }
 
   // 計算整個遊戲中「所有已建成的採集建築」在 elapsedSeconds 秒內的總產出
@@ -163,6 +177,7 @@ const Gathering = (function () {
     calcBuildingProduction, calcAllProduction, applyProduction,
     manualGather, getManualGatherCooldownRemaining, getDropTable,
     getEffectiveDropTable, getCharacterRarityMultiplier,
+    getBuildingUpgradeCost, MAX_BUILDING_LEVEL,
     MANUAL_GATHER_COOLDOWN_MS, MANUAL_GATHER_STAMINA_COST
   };
 })();

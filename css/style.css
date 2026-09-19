@@ -47,6 +47,27 @@ body {
   padding: 10px 16px;
 }
 
+/* ===== 上方固定人物資訊列（原本是倉庫的位置） ===== */
+.character-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(180deg, #f4ecd8 0%, #e8dcc0 100%);
+  border-bottom: 3px solid #a9895a;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+  padding: 10px 16px;
+}
+
+.character-top-bar .char-stat-block {
+  max-width: 1000px;
+  margin: 0 auto 8px;
+  padding: 6px 12px;
+}
+
+.character-top-bar .char-stat-block:last-child {
+  margin-bottom: 0;
+}
+
 .resource-list {
   max-width: 1000px;
   margin: 0 auto;
@@ -325,6 +346,8 @@ body {
   cursor: pointer;
   font-weight: bold;
 }
+
+.save-slot-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
