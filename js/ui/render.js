@@ -36,11 +36,11 @@ const UI = (function () {
     if (!container) return;
 
     const owned = Object.entries(state.resources)
-      .filter(([, amt]) => amt > 0)
+      .filter(([, amt]) => amt >= 1) // 未滿 1 個先不顯示，避免小數殘值造成一堆「0」的雜訊
       .sort((a, b) => b[1] - a[1]);
 
     if (owned.length === 0) {
-      container.innerHTML = '<p class="empty">尚未擁有任何資源</p>';
+      container.innerHTML = '<p class="empty">尚未擁有任何資源，先試試「徒手採集」吧</p>';
       return;
     }
 
@@ -90,8 +90,17 @@ const UI = (function () {
               </div>
             </div>`;
         }
-        return `<div class="building buildable">${b.icon} ${b.name}
-          <button onclick="UI.handleBuild('${spotId}', '${b.id}')">建造</button></div>`;
+
+        // 尚未建造：顯示建造成本，資源不足時按鈕仍可點但會提示不足
+        const costText = b.cost ? formatCost(b.cost) : '免費';
+        const affordable = b.cost ? GameState.hasResources(b.cost) : true;
+        return `
+          <div class="building buildable">
+            <div class="building-row">${b.icon} ${b.name}
+              <button class="${affordable ? '' : 'disabled-look'}" onclick="UI.handleBuild('${spotId}', '${b.id}')">建造</button>
+            </div>
+            <div class="cost-text">需要：${costText}</div>
+          </div>`;
       }).join('');
 
       const nextLevel = SPOT_LEVELS[spotState.level]; // 下一級資料（若存在）
@@ -99,11 +108,16 @@ const UI = (function () {
         ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
         : `<span class="max-level">已達最高等級</span>`;
 
+      const cooldown = Gathering.getManualGatherCooldownRemaining(spotId);
+      const manualBtnLabel = cooldown > 0 ? `冷卻中 (${cooldown}s)` : '✋ 徒手採集';
+      const manualBtnDisabled = cooldown > 0 ? 'disabled' : '';
+
       return `
         <div class="spot-card">
           <h3>${spotDef.icon} ${spotDef.name}（Lv.${spotState.level}）</h3>
           <p class="spot-desc">${spotDef.description}</p>
           <p class="spot-bonus">產量倍率 x${levelData.quantityMultiplier}　稀有加成 +${levelData.rarityBonus}%</p>
+          <button class="manual-gather-btn" ${manualBtnDisabled} onclick="UI.handleManualGather('${spotId}')">${manualBtnLabel}</button>
           <div class="buildings">${buildingsHtml}</div>
           <div class="upgrade">${upgradeHtml}</div>
         </div>
@@ -150,6 +164,11 @@ const UI = (function () {
   }
 
   function handleBuild(spotId, buildingId) {
+    const buildingDef = BUILDINGS[buildingId];
+    if (buildingDef.cost && !GameState.spendResources(buildingDef.cost)) {
+      alert(`資源不足，需要：${formatCost(buildingDef.cost)}`);
+      return;
+    }
     GameState.buildBuilding(spotId, buildingId);
     SaveLoad.save();
     render();
@@ -178,6 +197,29 @@ const UI = (function () {
     }
     SaveLoad.save();
     render();
+  }
+
+  function handleManualGather(spotId) {
+    const result = Gathering.manualGather(spotId);
+    if (!result.success) {
+      // 冷卻中，不特別跳警示框（太打擾），畫面上按鈕本身已經顯示冷卻秒數
+      render();
+      return;
+    }
+    const def = RESOURCES[result.resourceId];
+    notifyManualGather(def);
+    SaveLoad.save();
+    render();
+  }
+
+  function notifyManualGather(resourceDef) {
+    const container = document.getElementById('notifications');
+    if (!container || !resourceDef) return;
+    const div = document.createElement('div');
+    div.className = 'notification';
+    div.textContent = `${resourceDef.icon} 獲得 ${resourceDef.name} +1`;
+    container.appendChild(div);
+    setTimeout(() => div.remove(), 2000);
   }
 
   function notifyCraftingCompleted(completedJobs) {
@@ -216,7 +258,7 @@ const UI = (function () {
   }
 
   return {
-    render, handleBuild, handleUpgradeSpot, handleCraft,
+    render, handleBuild, handleUpgradeSpot, handleCraft, handleManualGather,
     notifyCraftingCompleted, showOfflineReport
   };
 })();

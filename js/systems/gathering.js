@@ -56,15 +56,52 @@ const Gathering = (function () {
     return totals;
   }
 
-  // 把計算出來的產出實際加進玩家資源（小數用 floor，避免資源出現小數點；
-  // 若想要精準保留小數殘值可自行改為累加浮點數，這裡先採簡單版本）
+  // 把計算出來的產出實際加進玩家資源。
+  // 資源內部保留浮點數精確累加（顯示時才用 formatAmount 做 floor），
+  // 這樣即使單次產量小於 1（例如每秒 0.1），累加多次後還是會正確增加，
+  // 不會像先前每次都 floor 導致資源永遠停在 0。
   function applyProduction(totals) {
     Object.entries(totals).forEach(([resId, amt]) => {
-      GameState.addResource(resId, Math.floor(amt));
+      GameState.addResource(resId, amt);
     });
   }
 
-  return { calcBuildingProduction, calcAllProduction, applyProduction };
+  // 玩家手動點擊採集（不需要建築）：從該採集點的資源池中隨機挑一種、給予少量資源
+  // 有冷卻時間避免瘋狂連點洗資源
+  const MANUAL_GATHER_COOLDOWN_MS = 2000;
+  const MANUAL_GATHER_AMOUNT = 1;
+
+  function manualGather(spotId) {
+    const state = GameState.get();
+    const spotState = state.spots[spotId];
+    if (!spotState) return { success: false, reason: '找不到採集點' };
+
+    const now = Date.now();
+    if (spotState.lastManualGatherAt && now - spotState.lastManualGatherAt < MANUAL_GATHER_COOLDOWN_MS) {
+      const remain = Math.ceil((MANUAL_GATHER_COOLDOWN_MS - (now - spotState.lastManualGatherAt)) / 1000);
+      return { success: false, reason: `冷卻中，還要等 ${remain} 秒` };
+    }
+
+    const pool = GATHERING_SPOTS[spotId].resourcePool;
+    const resourceId = pool[Math.floor(Math.random() * pool.length)];
+    GameState.addResource(resourceId, MANUAL_GATHER_AMOUNT);
+    spotState.lastManualGatherAt = now;
+
+    return { success: true, resourceId, amount: MANUAL_GATHER_AMOUNT };
+  }
+
+  function getManualGatherCooldownRemaining(spotId) {
+    const state = GameState.get();
+    const spotState = state.spots[spotId];
+    if (!spotState || !spotState.lastManualGatherAt) return 0;
+    const remainMs = MANUAL_GATHER_COOLDOWN_MS - (Date.now() - spotState.lastManualGatherAt);
+    return Math.max(0, Math.ceil(remainMs / 1000));
+  }
+
+  return {
+    calcBuildingProduction, calcAllProduction, applyProduction,
+    manualGather, getManualGatherCooldownRemaining
+  };
 })();
 
 if (typeof module !== 'undefined') {
