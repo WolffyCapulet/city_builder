@@ -2,7 +2,7 @@
 // 遊戲啟動流程：讀檔（含離線結算）→ 顯示離線報告 → 開始主迴圈
 
 window.addEventListener('DOMContentLoaded', () => {
-  const report = SaveLoad.load();
+  const report = SaveLoad.init();
   UI.render();
   UI.showOfflineReport(report);
   GameLoop.start();

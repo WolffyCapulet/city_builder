@@ -11,7 +11,17 @@
   <header class="game-header">
     <h1>⚔️ 城 主 村 莊 ⚔️</h1>
     <p class="subtitle">— 重製版 —</p>
+    <button class="save-panel-toggle" onclick="UI.toggleSavePanel()">💾 存檔管理</button>
   </header>
+
+  <!-- 存檔管理面板（預設隱藏） -->
+  <div id="save-overlay" class="save-overlay hidden" onclick="UI.closeSavePanelIfBackdrop(event)">
+    <div class="save-panel">
+      <h2 class="section-title">💾 存檔管理</h2>
+      <div id="save-slot-list" class="save-slot-list"></div>
+      <button class="close-panel-btn" onclick="UI.toggleSavePanel()">關閉</button>
+    </div>
+  </div>
 
   <!-- 上方固定資源列 -->
   <div id="resource-bar" class="resource-bar">

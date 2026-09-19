@@ -257,8 +257,115 @@ const UI = (function () {
     );
   }
 
+  function formatSlotTimestamp(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function renderSaveSlots() {
+    const container = document.getElementById('save-slot-list');
+    if (!container) return;
+
+    const activeSlot = SaveLoad.getActiveSlot();
+
+    let html = '';
+    for (let i = 1; i <= SaveLoad.SLOT_COUNT; i++) {
+      const meta = SaveLoad.getSlotMeta(i);
+      const isActive = i === activeSlot;
+
+      const infoText = meta.empty
+        ? '空格'
+        : `擁有資源總數：${meta.resourceCount}　最後存檔：${formatSlotTimestamp(meta.lastTimestamp)}`;
+
+      html += `
+        <div class="save-slot ${isActive ? 'active-slot' : ''}">
+          <div class="save-slot-header">
+            <span class="save-slot-title">存檔格 ${i} ${isActive ? '（目前遊玩中）' : ''}</span>
+          </div>
+          <div class="save-slot-info">${infoText}</div>
+          <div class="save-slot-actions">
+            <button onclick="UI.handleSaveToSlot(${i})">存檔到此格</button>
+            <button onclick="UI.handleLoadSlot(${i})" ${isActive ? 'disabled' : ''}>讀取此格</button>
+            <button class="danger-btn" onclick="UI.handleClearSlot(${i})" ${meta.empty ? 'disabled' : ''}>清空</button>
+          </div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  function toggleSavePanel() {
+    const overlay = document.getElementById('save-overlay');
+    if (!overlay) return;
+    overlay.classList.toggle('hidden');
+    if (!overlay.classList.contains('hidden')) {
+      renderSaveSlots();
+    }
+  }
+
+  function closeSavePanelIfBackdrop(event) {
+    if (event.target.id === 'save-overlay') {
+      toggleSavePanel();
+    }
+  }
+
+  function handleSaveToSlot(slotIndex) {
+    const activeSlot = SaveLoad.getActiveSlot();
+    const meta = SaveLoad.getSlotMeta(slotIndex);
+
+    // 存到別的格子、而且那格已經有別的進度時，先確認避免誤蓋
+    if (slotIndex !== activeSlot && !meta.empty) {
+      const ok = confirm(`存檔格 ${slotIndex} 已經有其他進度，存檔會覆蓋掉它，確定要覆蓋嗎？`);
+      if (!ok) return;
+    }
+
+    SaveLoad.save(slotIndex);
+    renderSaveSlots();
+    notifySimple(`已存檔到存檔格 ${slotIndex}`);
+  }
+
+  function handleLoadSlot(slotIndex) {
+    const activeSlot = SaveLoad.getActiveSlot();
+    if (slotIndex === activeSlot) return;
+
+    // 切換前先把目前進度存回原本的格子，避免遺失
+    SaveLoad.save(activeSlot);
+
+    const report = SaveLoad.loadSlot(slotIndex);
+    render();
+    renderSaveSlots();
+    toggleSavePanel();
+    UI.showOfflineReport(report);
+  }
+
+  function handleClearSlot(slotIndex) {
+    const ok = confirm(
+      `確定要清空存檔格 ${slotIndex} 嗎？\n\n這個動作無法復原，這個格子裡的所有資料都會永久消失。`
+    );
+    if (!ok) return;
+
+    SaveLoad.clearSlot(slotIndex);
+    render();
+    renderSaveSlots();
+    notifySimple(`存檔格 ${slotIndex} 已清空`);
+  }
+
+  function notifySimple(text) {
+    const container = document.getElementById('notifications');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'notification';
+    div.textContent = text;
+    container.appendChild(div);
+    setTimeout(() => div.remove(), 2500);
+  }
+
   return {
     render, handleBuild, handleUpgradeSpot, handleCraft, handleManualGather,
-    notifyCraftingCompleted, showOfflineReport
+    notifyCraftingCompleted, showOfflineReport,
+    toggleSavePanel, closeSavePanelIfBackdrop,
+    handleSaveToSlot, handleLoadSlot, handleClearSlot
   };
 })();
