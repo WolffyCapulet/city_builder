@@ -112,6 +112,43 @@ const RECIPES = {
     input: { feather: 3, leather: 1 },
     output: { bedding: 1 },
     duration: 60
+  },
+
+  // ===== 平原：廚房（把食材煮成料理，恢復體力比生食高很多）=====
+  grilled_meat_recipe: {
+    id: 'grilled_meat_recipe',
+    building: 'kitchen',
+    input: { meat: 2 },
+    output: { grilled_meat: 1 },
+    duration: 20
+  },
+  grilled_fish_recipe: {
+    id: 'grilled_fish_recipe',
+    building: 'kitchen',
+    input: { fish: 2 },
+    output: { grilled_fish: 1 },
+    duration: 20
+  },
+  vegetable_stew_recipe: {
+    id: 'vegetable_stew_recipe',
+    building: 'kitchen',
+    input: { tomato: 2, corn: 2 },
+    output: { vegetable_stew: 1 },
+    duration: 40
+  },
+  bread_recipe: {
+    id: 'bread_recipe',
+    building: 'kitchen',
+    input: { flour: 3 },
+    output: { bread: 2 },
+    duration: 30
+  },
+  seafood_soup_recipe: {
+    id: 'seafood_soup_recipe',
+    building: 'kitchen',
+    input: { fish: 1, shrimp: 1, salt: 1 },
+    output: { seafood_soup: 1 },
+    duration: 50
   }
 };
 

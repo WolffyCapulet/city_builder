@@ -29,12 +29,18 @@ const BUILDINGS = {
   gem_workshop:  { id: 'gem_workshop',  name: '寶石加工坊', spot: 'mine', type: 'processing', icon: '💎', unlockLevel: 4, cost: { wood: 60, crystal: 5 } },
 
   // ===== 平原 =====
-  farmland:      { id: 'farmland',      name: '農田',     spot: 'plains', type: 'gathering',  icon: '🌾', unlockLevel: 1, cost: { wood: 15, fiber_p: 10 } },
-  chicken_coop:  { id: 'chicken_coop',  name: '雞舍',     spot: 'plains', type: 'gathering',  icon: '🐔', unlockLevel: 1, cost: { wood: 15, feather: 10 } },
-  irrigation:    { id: 'irrigation',    name: '灌溉系統', spot: 'plains', type: 'gathering',  icon: '💧', unlockLevel: 3, cost: { wood: 40, stone_f: 20 } },
-  granary:       { id: 'granary',       name: '穀倉',     spot: 'plains', type: 'gathering',  icon: '🏚️', unlockLevel: 2, cost: { wood: 30, plank: 10 } },
-  mill:          { id: 'mill',          name: '磨坊',     spot: 'plains', type: 'processing', icon: '🌀', unlockLevel: 2, cost: { wood: 25, stone_f: 15 } },
-  tailor_shop:   { id: 'tailor_shop',   name: '裁縫坊',   spot: 'plains', type: 'processing', icon: '🧵', unlockLevel: 3, cost: { wood: 30, leather: 5 } }
+  // category 只有平原用來細分「種植 / 畜牧 / 烹飪 / 商店」四個子系統，方便畫面分組顯示
+  farmland:      { id: 'farmland',      name: '農田',     spot: 'plains', type: 'gathering',  icon: '🌾', unlockLevel: 1, cost: { wood: 15, fiber_p: 10 }, category: 'farming' },
+  irrigation:    { id: 'irrigation',    name: '灌溉系統', spot: 'plains', type: 'gathering',  icon: '💧', unlockLevel: 3, cost: { wood: 40, stone_f: 20 }, category: 'farming' },
+  granary:       { id: 'granary',       name: '穀倉',     spot: 'plains', type: 'gathering',  icon: '🏚️', unlockLevel: 2, cost: { wood: 30, plank: 10 }, category: 'farming' },
+  mill:          { id: 'mill',          name: '磨坊',     spot: 'plains', type: 'processing', icon: '🌀', unlockLevel: 2, cost: { wood: 25, stone_f: 15 }, category: 'farming' },
+
+  chicken_coop:  { id: 'chicken_coop',  name: '雞舍',     spot: 'plains', type: 'gathering',  icon: '🐔', unlockLevel: 1, cost: { wood: 15, feather: 10 }, category: 'husbandry' },
+  tailor_shop:   { id: 'tailor_shop',   name: '裁縫坊',   spot: 'plains', type: 'processing', icon: '🧵', unlockLevel: 3, cost: { wood: 30, leather: 5 }, category: 'husbandry' },
+
+  kitchen:       { id: 'kitchen',       name: '廚房',     spot: 'plains', type: 'processing', icon: '🍳', unlockLevel: 2, cost: { wood: 25, stone_f: 15 }, category: 'cooking' },
+
+  market:        { id: 'market',        name: '市集',     spot: 'plains', type: 'shop',       icon: '🏪', unlockLevel: 2, cost: { wood: 40, stone_f: 20 }, category: 'shop' }
 };
 
 if (typeof module !== 'undefined') {

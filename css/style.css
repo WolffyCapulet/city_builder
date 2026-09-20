@@ -548,6 +548,70 @@ body {
   opacity: 0.55;
 }
 
+.category-group {
+  margin-bottom: 10px;
+}
+
+.category-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: #7a561f;
+  margin: 8px 0 4px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #cdb37f;
+}
+
+.spot-upgrade-box {
+  background: #fff3d9;
+  border: 2px solid #a06a2c;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.spot-upgrade-label {
+  font-size: 12.5px;
+  color: #8a7550;
+  margin-bottom: 6px;
+}
+
+.shop-section {
+  margin-bottom: 18px;
+}
+
+.shop-section-title {
+  font-weight: bold;
+  color: #5c4326;
+  font-size: 14px;
+  margin-bottom: 8px;
+  border-bottom: 2px dashed #cdb37f;
+  padding-bottom: 4px;
+}
+
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fffaf0;
+  border: 1px solid #c9ac74;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  color: #4a3820;
+}
+
+.shop-row button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid #7a561f;
+  background: linear-gradient(180deg, #f9e6c4 0%, #e9cc93 100%);
+  color: #4a3820;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12.5px;
+}
+
 .upgrade {
   margin-top: 12px;
   padding-top: 10px;

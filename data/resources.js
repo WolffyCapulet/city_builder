@@ -27,9 +27,7 @@ const RESOURCES = {
   salt:        { id: 'salt',        name: '鹽',     rarity: RARITY.COMMON,   spot: 'beach', icon: '🧂' },
   sand:        { id: 'sand',        name: '沙子',   rarity: RARITY.COMMON,   spot: 'beach', icon: '⏳' },
   seaweed:     { id: 'seaweed',     name: '海帶',   rarity: RARITY.COMMON,   spot: 'beach', icon: '🌿' },
-  stone_b:     { id: 'stone_b',     name: '石頭',   rarity: RARITY.COMMON,   spot: 'beach', icon: '🪨' },
   coral:       { id: 'coral',       name: '珊瑚',   rarity: RARITY.UNCOMMON, spot: 'beach', icon: '🪸' },
-  ore_raw_b:   { id: 'ore_raw_b',   name: '礦石',   rarity: RARITY.UNCOMMON, spot: 'beach', icon: '⛏️' },
   bone_b:      { id: 'bone_b',      name: '骨頭',   rarity: RARITY.COMMON,   spot: 'beach', icon: '🦴' },
   shrimp:      { id: 'shrimp',      name: '蝦',     rarity: RARITY.COMMON,   spot: 'beach', icon: '🦐' },
   crab:        { id: 'crab',        name: '蟹',     rarity: RARITY.UNCOMMON, spot: 'beach', icon: '🦀' },
@@ -81,7 +79,14 @@ const RESOURCES = {
   flour:       { id: 'flour',       name: '麵粉',   rarity: RARITY.COMMON,   spot: 'crafted', icon: '🌾' },
   feed:        { id: 'feed',        name: '飼料',   rarity: RARITY.COMMON,   spot: 'crafted', icon: '🥣' },
   cloth:       { id: 'cloth',       name: '衣物',   rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '👕' },
-  bedding:     { id: 'bedding',     name: '寢具',   rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '🛏️' }
+  bedding:     { id: 'bedding',     name: '寢具',   rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '🛏️' },
+
+  // ===== 烹飪料理 (cooked，比生食恢復更多體力) =====
+  grilled_meat:  { id: 'grilled_meat',  name: '烤肉',     rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '🍗' },
+  grilled_fish:  { id: 'grilled_fish',  name: '烤魚',     rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '🐠' },
+  vegetable_stew:{ id: 'vegetable_stew',name: '蔬菜燉湯', rarity: RARITY.UNCOMMON, spot: 'crafted', icon: '🍲' },
+  bread:         { id: 'bread',         name: '麵包',     rarity: RARITY.COMMON,   spot: 'crafted', icon: '🍞' },
+  seafood_soup:  { id: 'seafood_soup',  name: '海鮮湯',   rarity: RARITY.RARE,     spot: 'crafted', icon: '🍜' }
 };
 
 // 給其他檔案使用（若採用 <script> 直接載入，這些變數會是全域變數）

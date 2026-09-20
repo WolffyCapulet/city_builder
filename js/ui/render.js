@@ -73,7 +73,7 @@ const UI = (function () {
 
     container.innerHTML = `
       <div class="char-stat-block">
-        <div class="char-stat-label">等級 Lv.${c.level}　經驗值 ${c.exp} / ${expNeeded}</div>
+        <div class="char-stat-label">等級 Lv.${c.level}　經驗值 ${c.exp} / ${expNeeded}　　💰 金幣：${Math.floor(GameState.get().gold || 0)}</div>
         <div class="stat-bar-container">
           <div class="stat-bar-fill exp-fill" style="width:${expPct}%"></div>
         </div>
@@ -121,6 +121,79 @@ const UI = (function () {
       return;
     }
     notifySimple(`🍽️ 恢復了 ${result.staminaRestored} 點體力`);
+    SaveLoad.save();
+    render();
+  }
+
+  // ========== 商店（需要建造市集才能使用） ==========
+
+  function renderShopPanel() {
+    const container = document.getElementById('shop-panel');
+    if (!container) return;
+
+    if (!Shop.isUnlocked()) {
+      container.innerHTML = '<p class="empty">尚未建造市集，無法使用商店功能——請到「建築」分頁的平原蓋一座市集</p>';
+      return;
+    }
+
+    const state = GameState.get();
+
+    // 賣出：列出目前擁有的所有資源
+    const owned = Object.entries(state.resources).filter(([, amt]) => amt >= 1);
+    const sellRowsHtml = owned.length === 0
+      ? '<p class="empty">沒有東西可以賣</p>'
+      : owned.map(([resId, amt]) => {
+          const def = RESOURCES[resId];
+          if (!def) return '';
+          const price = Shop.getSellPrice(resId);
+          return `
+            <div class="shop-row">
+              <span>${def.icon} ${def.name} x${Math.floor(amt)}（單價 💰${price}）</span>
+              <button onclick="UI.handleSellResource('${resId}')">賣出 1 個</button>
+            </div>`;
+        }).join('');
+
+    // 買入：只有 BUYABLE_RESOURCES 清單內的基礎建材
+    const buyRowsHtml = BUYABLE_RESOURCES.map(resId => {
+      const def = RESOURCES[resId];
+      const price = Shop.getBuyPrice(resId);
+      return `
+        <div class="shop-row">
+          <span>${def.icon} ${def.name}（單價 💰${price}）</span>
+          <button onclick="UI.handleBuyResource('${resId}')">買入 1 個</button>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="shop-section">
+        <div class="shop-section-title">賣出（換取金幣）</div>
+        ${sellRowsHtml}
+      </div>
+      <div class="shop-section">
+        <div class="shop-section-title">買入（用金幣應急補貨，只開放基礎建材）</div>
+        ${buyRowsHtml}
+      </div>
+    `;
+  }
+
+  function handleSellResource(resourceId) {
+    const result = Shop.sell(resourceId, 1);
+    if (!result.success) {
+      alert(result.reason);
+      return;
+    }
+    notifySimple(`💰 賣出獲得 ${result.goldGained} 金幣`);
+    SaveLoad.save();
+    render();
+  }
+
+  function handleBuyResource(resourceId) {
+    const result = Shop.buy(resourceId, 1);
+    if (!result.success) {
+      alert(result.reason);
+      return;
+    }
+    notifySimple(`🛒 花費 ${result.goldSpent} 金幣買入`);
     SaveLoad.save();
     render();
   }
@@ -192,6 +265,34 @@ const UI = (function () {
       </div>`;
   }
 
+  // 平原會用 category 把建築分成種植/畜牧/烹飪/商店四組；其他採集點沒有 category，全部歸在同一組（不顯示子標題）
+  const CATEGORY_LABELS = { farming: '🌾 種植', husbandry: '🐔 畜牧', cooking: '🍳 烹飪', shop: '🏪 商店' };
+  const CATEGORY_ORDER = ['farming', 'husbandry', 'cooking', 'shop', 'other'];
+
+  function renderGroupedBuildingItems(buildings, renderItemFn) {
+    const groups = {};
+    buildings.forEach(b => {
+      const cat = b.category || 'other';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(b);
+    });
+
+    const hasRealCategories = Object.keys(groups).some(k => k !== 'other');
+
+    return CATEGORY_ORDER
+      .filter(cat => groups[cat] && groups[cat].length > 0)
+      .map(cat => {
+        const itemsHtml = groups[cat].map(renderItemFn).join('');
+        if (!hasRealCategories || cat === 'other') {
+          return itemsHtml; // 沒有分類時，不顯示子標題，直接列出
+        }
+        return `<div class="category-group">
+          <div class="category-title">${CATEGORY_LABELS[cat] || cat}</div>
+          ${itemsHtml}
+        </div>`;
+      }).join('');
+  }
+
   function renderProductionTab() {
     const state = GameState.get();
     const container = document.getElementById('production-list');
@@ -206,7 +307,7 @@ const UI = (function () {
 
       const buildingsHtml = builtGathering.length === 0
         ? '<p class="empty">這裡還沒有任何生產建築，先去「建築」分頁蓋一座吧</p>'
-        : builtGathering.map(b => {
+        : renderGroupedBuildingItems(builtGathering, b => {
             const buildingLevel = GameState.getBuildingLevel(spotId, b.id);
             const progress = GameLoop.getProductionProgress();
             const outputText = formatPerCycleOutput(b.id, buildingLevel);
@@ -218,7 +319,7 @@ const UI = (function () {
                   <div class="progress-bar-fill" style="width:${progress}%"></div>
                 </div>
               </div>`;
-          }).join('');
+          });
 
       const cooldown = Gathering.getManualGatherCooldownRemaining(spotId);
       const stamina = state.character.stamina;
@@ -281,13 +382,13 @@ const UI = (function () {
 
       if (builtProcessing.length === 0) return '';
 
-      const buildingsHtml = builtProcessing.map(b => {
+      const buildingsHtml = renderGroupedBuildingItems(builtProcessing, b => {
         const recipes = Object.values(RECIPES).filter(r => r.building === b.id);
         const recipeButtons = recipes.map(r =>
           `<button onclick="UI.handleCraft('${spotId}', '${r.id}')">製作 ${formatRecipeLabel(r)}</button>`
         ).join(' ');
         return `<div class="building built">${b.icon} ${b.name}　${recipeButtons}</div>`;
-      }).join('');
+      });
 
       return `
         <div class="spot-card">
@@ -339,14 +440,14 @@ const UI = (function () {
       const spotState = state.spots[spotId];
       const availableBuildings = Object.values(BUILDINGS).filter(b => b.spot === spotId);
 
-      const buildingsHtml = availableBuildings.map(b => {
+      const buildItemHtml = (b) => {
         const built = GameState.hasBuilding(spotId, b.id);
         const locked = spotState.level < b.unlockLevel;
 
         if (built) {
           const level = GameState.getBuildingLevel(spotId, b.id);
           if (b.type !== 'gathering') {
-            // 加工建築目前先不支援升級（維持 Lv.1），未來可再擴充
+            // 加工建築／商店目前先不支援升級（維持 Lv.1），未來可再擴充
             return `<div class="building built">✅ ${b.icon} ${b.name}（已建造）</div>`;
           }
           if (level >= Gathering.MAX_BUILDING_LEVEL) {
@@ -375,18 +476,23 @@ const UI = (function () {
             </div>
             <div class="cost-text">需要：${costText}</div>
           </div>`;
-      }).join('');
+      };
+
+      const buildingsHtml = renderGroupedBuildingItems(availableBuildings, buildItemHtml);
 
       const nextLevel = SPOT_LEVELS[spotState.level];
       const upgradeHtml = nextLevel
-        ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
-        : `<span class="max-level">已達最高等級</span>`;
+        ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級採集點到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
+        : `<span class="max-level">採集點已達最高等級</span>`;
 
       return `
         <div class="spot-card">
-          <h3>${spotDef.icon} ${spotDef.name}（Lv.${spotState.level}）</h3>
+          <h3>${spotDef.icon} ${spotDef.name}（採集點 Lv.${spotState.level}）</h3>
+          <div class="spot-upgrade-box">
+            <div class="spot-upgrade-label">採集點升級（解鎖新建築、提高徒手採集機率表等級）</div>
+            ${upgradeHtml}
+          </div>
           <div class="buildings">${buildingsHtml}</div>
-          <div class="upgrade">${upgradeHtml}</div>
         </div>`;
     }).join('');
   }
@@ -560,6 +666,7 @@ const UI = (function () {
     renderResources();
     renderCharacterPanel();
     renderFoodList();
+    renderShopPanel();
     renderSaveSlots();
     renderProductionTab();
     renderCraftingTab();
@@ -570,6 +677,7 @@ const UI = (function () {
   return {
     render, switchTab,
     handleBuild, handleUpgradeSpot, handleUpgradeBuilding, handleCraft, handleManualGather, handleEatFood,
+    handleSellResource, handleBuyResource,
     toggleProbabilityView,
     notifyCraftingCompleted, showOfflineReport,
     handleSaveToSlot, handleLoadSlot, handleClearSlot

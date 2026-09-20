@@ -29,13 +29,16 @@
 
     <main class="main-content">
 
-      <!-- 倉庫分頁：資源清單、進食、存檔管理 -->
+      <!-- 倉庫分頁：資源清單、進食、商店、存檔管理 -->
       <section id="tab-warehouse" class="tab-panel">
         <h2 class="section-title">🏠 倉庫</h2>
         <div id="resource-list" class="resource-list"></div>
 
         <h2 class="section-title">🍖 食用補充體力</h2>
         <div id="food-list" class="food-list"></div>
+
+        <h2 class="section-title">🏪 商店</h2>
+        <div id="shop-panel"></div>
 
         <h2 class="section-title">💾 存檔管理</h2>
         <div id="save-slot-list" class="save-slot-list"></div>
@@ -75,6 +78,7 @@
   <script src="data/production.js"></script>
   <script src="data/dropTables.js"></script>
   <script src="data/food.js"></script>
+  <script src="data/shop.js"></script>
 
   <!-- Core 層 -->
   <script src="js/core/gameState.js"></script>
@@ -85,6 +89,7 @@
   <script src="js/systems/gathering.js"></script>
   <script src="js/systems/crafting.js"></script>
   <script src="js/systems/character.js"></script>
+  <script src="js/systems/shop.js"></script>
 
   <!-- UI 層 -->
   <script src="js/ui/render.js"></script>
