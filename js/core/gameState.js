@@ -19,6 +19,8 @@ const GameState = (function () {
         buildings: {} // { buildingId: { built: true, level: 1 } }
       };
     });
+    // 村莊：放加工/商店建築，沒有「等級」概念，但沿用同一套 buildings 結構
+    spots.village = { level: 1, buildings: {} };
 
     return {
       resources: {},        // { resourceId: quantity }
@@ -45,6 +47,10 @@ const GameState = (function () {
     // 相容舊存檔：如果讀到的存檔還沒有 character 欄位，補上預設值
     if (!state.character) {
       state.character = { level: 1, exp: 0, stamina: BASE_MAX_STAMINA, maxStamina: BASE_MAX_STAMINA };
+    }
+    // 相容舊存檔：舊存檔可能還沒有村莊欄位（加工/商店建築原本綁在其他採集點）
+    if (!state.spots.village) {
+      state.spots.village = { level: 1, buildings: {} };
     }
     return state;
   }

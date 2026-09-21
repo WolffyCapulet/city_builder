@@ -125,46 +125,40 @@ const UI = (function () {
     render();
   }
 
-  // ========== 商店（需要建造市集才能使用） ==========
+  // ========== 商店（需要建造市集才能使用，顯示在「建築」分頁的村莊卡片裡） ==========
 
-  function renderShopPanel() {
-    const container = document.getElementById('shop-panel');
-    if (!container) return;
-
+  function renderShopSectionHtml() {
     if (!Shop.isUnlocked()) {
-      container.innerHTML = '<p class="empty">尚未建造市集，無法使用商店功能——請到「建築」分頁的平原蓋一座市集</p>';
-      return;
+      return '<p class="empty">尚未建造市集，無法使用商店功能——請先在下面蓋一座市集</p>';
     }
 
     const state = GameState.get();
 
-    // 賣出：列出目前擁有的所有資源
     const owned = Object.entries(state.resources).filter(([, amt]) => amt >= 1);
     const sellRowsHtml = owned.length === 0
       ? '<p class="empty">沒有東西可以賣</p>'
-      : owned.map(([resId, amt]) => {
+      : `<div class="shop-grid">${owned.map(([resId, amt]) => {
           const def = RESOURCES[resId];
           if (!def) return '';
           const price = Shop.getSellPrice(resId);
           return `
             <div class="shop-row">
-              <span>${def.icon} ${def.name} x${Math.floor(amt)}（單價 💰${price}）</span>
-              <button onclick="UI.handleSellResource('${resId}')">賣出 1 個</button>
+              <span>${def.icon} ${def.name} x${Math.floor(amt)}（💰${price}）</span>
+              <button onclick="UI.handleSellResource('${resId}')">賣1</button>
             </div>`;
-        }).join('');
+        }).join('')}</div>`;
 
-    // 買入：只有 BUYABLE_RESOURCES 清單內的基礎建材
-    const buyRowsHtml = BUYABLE_RESOURCES.map(resId => {
+    const buyRowsHtml = `<div class="shop-grid">${BUYABLE_RESOURCES.map(resId => {
       const def = RESOURCES[resId];
       const price = Shop.getBuyPrice(resId);
       return `
         <div class="shop-row">
-          <span>${def.icon} ${def.name}（單價 💰${price}）</span>
-          <button onclick="UI.handleBuyResource('${resId}')">買入 1 個</button>
+          <span>${def.icon} ${def.name}（💰${price}）</span>
+          <button onclick="UI.handleBuyResource('${resId}')">買1</button>
         </div>`;
-    }).join('');
+    }).join('')}</div>`;
 
-    container.innerHTML = `
+    return `
       <div class="shop-section">
         <div class="shop-section-title">賣出（換取金幣）</div>
         ${sellRowsHtml}
@@ -370,13 +364,16 @@ const UI = (function () {
 
   // ========== 加工分頁 ==========
 
+  // 加工/建築分頁要涵蓋四個採集點 + 村莊；生產分頁只需要四個採集點（村莊沒有採集/機率表）
+  const ALL_LOCATIONS = Object.assign({}, GATHERING_SPOTS, { village: VILLAGE });
+
   function renderCraftingTab() {
     const state = GameState.get();
     const container = document.getElementById('crafting-buildings-list');
     if (!container) return;
 
-    const spotsWithProcessing = Object.keys(GATHERING_SPOTS).map(spotId => {
-      const spotDef = GATHERING_SPOTS[spotId];
+    const spotsWithProcessing = Object.keys(ALL_LOCATIONS).map(spotId => {
+      const spotDef = ALL_LOCATIONS[spotId];
       const builtProcessing = Object.values(BUILDINGS)
         .filter(b => b.spot === spotId && b.type === 'processing' && GameState.hasBuilding(spotId, b.id));
 
@@ -397,7 +394,7 @@ const UI = (function () {
         </div>`;
     }).filter(html => html !== '').join('');
 
-    container.innerHTML = spotsWithProcessing || '<p class="empty">還沒有任何加工建築，先到「建築」分頁蓋一座吧</p>';
+    container.innerHTML = spotsWithProcessing || '<p class="empty">還沒有任何加工建築，先到「建築」分頁的村莊蓋一座吧</p>';
   }
 
   function renderCraftingQueue() {
@@ -435,8 +432,9 @@ const UI = (function () {
     const container = document.getElementById('construction-list');
     if (!container) return;
 
-    container.innerHTML = Object.keys(GATHERING_SPOTS).map(spotId => {
-      const spotDef = GATHERING_SPOTS[spotId];
+    container.innerHTML = Object.keys(ALL_LOCATIONS).map(spotId => {
+      const isVillage = spotId === 'village';
+      const spotDef = ALL_LOCATIONS[spotId];
       const spotState = state.spots[spotId];
       const availableBuildings = Object.values(BUILDINGS).filter(b => b.spot === spotId);
 
@@ -498,14 +496,26 @@ const UI = (function () {
         ? `<button class="spot-upgrade-btn" onclick="UI.handleUpgradeSpot('${spotId}')">升級採集點到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
         : `<span class="max-level">採集點已達最高等級</span>`;
 
-      return `
-        <div class="spot-card">
-          <h3>${spotDef.icon} ${spotDef.name}（採集點 Lv.${spotState.level}）</h3>
+      const upgradeBoxHtml = isVillage ? '' : `
           <div class="spot-upgrade-box">
             <div class="spot-upgrade-label">採集點升級（解鎖新建築、提高徒手採集機率表等級）</div>
             ${upgradeHtml}
-          </div>
+          </div>`;
+
+      const shopHtml = isVillage ? `
+          <h3 class="village-shop-title">🏪 商店</h3>
+          <div class="shop-wrapper">${renderShopSectionHtml()}</div>` : '';
+
+      const titleText = isVillage
+        ? `${spotDef.icon} ${spotDef.name}`
+        : `${spotDef.icon} ${spotDef.name}（採集點 Lv.${spotState.level}）`;
+
+      return `
+        <div class="spot-card">
+          <h3>${titleText}</h3>
+          ${upgradeBoxHtml}
           <div class="buildings">${buildingsHtml}${maxedHtml}</div>
+          ${shopHtml}
         </div>`;
     }).join('');
   }
@@ -679,7 +689,6 @@ const UI = (function () {
     renderResources();
     renderCharacterPanel();
     renderFoodList();
-    renderShopPanel();
     renderSaveSlots();
     renderProductionTab();
     renderCraftingTab();
