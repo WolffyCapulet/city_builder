@@ -266,8 +266,8 @@ const UI = (function () {
   }
 
   // 平原會用 category 把建築分成種植/畜牧/烹飪/商店四組；其他採集點沒有 category，全部歸在同一組（不顯示子標題）
-  const CATEGORY_LABELS = { farming: '🌾 種植', husbandry: '🐔 畜牧', cooking: '🍳 烹飪', shop: '🏪 商店' };
-  const CATEGORY_ORDER = ['farming', 'husbandry', 'cooking', 'shop', 'other'];
+  const CATEGORY_LABELS = { farming: '🌾 種植', husbandry: '🐔 畜牧', processing: '⚒️ 加工', cooking: '🍳 烹飪', shop: '🏪 商店' };
+  const CATEGORY_ORDER = ['farming', 'husbandry', 'processing', 'cooking', 'shop', 'other'];
 
   function renderGroupedBuildingItems(buildings, renderItemFn) {
     const groups = {};
@@ -313,7 +313,7 @@ const UI = (function () {
             const outputText = formatPerCycleOutput(b.id, buildingLevel);
             return `
               <div class="building built gathering">
-                <div class="building-row">✅ ${b.icon} ${b.name}（建築 Lv.${buildingLevel}）</div>
+                <div class="building-row">${b.icon} ${b.name} Lv.${buildingLevel}</div>
                 <div class="produce-icons">每輪：${outputText}</div>
                 <div class="progress-bar-container">
                   <div class="progress-bar-fill" style="width:${progress}%"></div>
@@ -323,10 +323,10 @@ const UI = (function () {
 
       const cooldown = Gathering.getManualGatherCooldownRemaining(spotId);
       const stamina = state.character.stamina;
-      let manualBtnLabel = '✋ 徒手採集（消耗體力1）';
+      let manualBtnLabel = '徒手採集<br><span class="btn-sub">(消耗1)</span>';
       let manualBtnDisabled = '';
       if (cooldown > 0) {
-        manualBtnLabel = `冷卻中 (${cooldown}s)`;
+        manualBtnLabel = `冷卻中<br><span class="btn-sub">(${cooldown}s)</span>`;
         manualBtnDisabled = 'disabled';
       } else if (stamina < Gathering.MANUAL_GATHER_STAMINA_COST) {
         manualBtnLabel = '體力不足';
@@ -447,17 +447,16 @@ const UI = (function () {
         if (built) {
           const level = GameState.getBuildingLevel(spotId, b.id);
           if (b.type !== 'gathering') {
-            // 加工建築／商店目前先不支援升級（維持 Lv.1），未來可再擴充
-            return `<div class="building built">✅ ${b.icon} ${b.name}（已建造）</div>`;
+            return `<div class="building built">${b.icon} ${b.name}（已建造）</div>`;
           }
           if (level >= Gathering.MAX_BUILDING_LEVEL) {
-            return `<div class="building built">✅ ${b.icon} ${b.name}（建築 Lv.${level}，已達最高等級）</div>`;
+            return `<div class="building built maxed">${b.icon} ${b.name} Lv.${level}（已滿級）</div>`;
           }
           const upgradeCost = Gathering.getBuildingUpgradeCost(b.id, level);
           const canAffordUpgrade = GameState.hasResources(upgradeCost);
           return `
             <div class="building built">
-              <div class="building-row">✅ ${b.icon} ${b.name}（建築 Lv.${level}）
+              <div class="building-row">${b.icon} ${b.name} Lv.${level}
                 <button class="${canAffordUpgrade ? '' : 'disabled-look'}" onclick="UI.handleUpgradeBuilding('${spotId}', '${b.id}')">升級到 Lv.${level + 1}</button>
               </div>
               <div class="cost-text">升級需要：${formatCost(upgradeCost)}</div>
@@ -478,11 +477,25 @@ const UI = (function () {
           </div>`;
       };
 
-      const buildingsHtml = renderGroupedBuildingItems(availableBuildings, buildItemHtml);
+      // 已滿級的建築獨立分出一區，其餘（未建造/可升級）照原本的分類群組顯示
+      const isMaxedGathering = b => b.type === 'gathering'
+        && GameState.hasBuilding(spotId, b.id)
+        && GameState.getBuildingLevel(spotId, b.id) >= Gathering.MAX_BUILDING_LEVEL;
+
+      const maxedBuildings = availableBuildings.filter(isMaxedGathering);
+      const normalBuildings = availableBuildings.filter(b => !isMaxedGathering(b));
+
+      const buildingsHtml = renderGroupedBuildingItems(normalBuildings, buildItemHtml);
+      const maxedHtml = maxedBuildings.length > 0
+        ? `<div class="category-group">
+             <div class="category-title">🏆 已滿級建築</div>
+             ${maxedBuildings.map(buildItemHtml).join('')}
+           </div>`
+        : '';
 
       const nextLevel = SPOT_LEVELS[spotState.level];
       const upgradeHtml = nextLevel
-        ? `<button onclick="UI.handleUpgradeSpot('${spotId}')">升級採集點到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
+        ? `<button class="spot-upgrade-btn" onclick="UI.handleUpgradeSpot('${spotId}')">升級採集點到 Lv.${nextLevel.level}（消耗：${formatCost(nextLevel.upgradeCost)}）</button>`
         : `<span class="max-level">採集點已達最高等級</span>`;
 
       return `
@@ -492,7 +505,7 @@ const UI = (function () {
             <div class="spot-upgrade-label">採集點升級（解鎖新建築、提高徒手採集機率表等級）</div>
             ${upgradeHtml}
           </div>
-          <div class="buildings">${buildingsHtml}</div>
+          <div class="buildings">${buildingsHtml}${maxedHtml}</div>
         </div>`;
     }).join('');
   }
